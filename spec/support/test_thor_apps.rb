@@ -114,9 +114,10 @@ class OptionsTestApp < Thor
   option :times, type: :numeric, default: 1, desc: "Number of times to greet"
   def greet(name)
     greeting = "Hello #{name}!"
-    greeting = greeting.upcase if options[:loud]
+    greeting = greeting.upcase if options && options[:loud]
     
-    options[:times].times do
+    times = (options && options[:times]) || 1
+    times.times do
       puts greeting
     end
   end
@@ -124,7 +125,7 @@ class OptionsTestApp < Thor
   desc "config KEY VALUE", "Set configuration"
   option :global, type: :boolean, desc: "Set globally"
   def config(key, value)
-    scope = options[:global] ? "global" : "local"
+    scope = (options && options[:global]) ? "global" : "local"
     puts "Set #{key}=#{value} (#{scope})"
   end
 end

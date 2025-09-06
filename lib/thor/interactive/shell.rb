@@ -85,6 +85,9 @@ class Thor
       end
 
       def process_input(input)
+        # Handle completely empty input
+        return if input.nil? || input.strip.empty?
+
         args = parse_input(input)
         return if args.empty?
 
@@ -117,7 +120,8 @@ class Thor
         if command == "help"
           show_help(args.first)
         else
-          # Call the method directly on the instance for better reliability
+          # For simple commands, call directly for state persistence
+          # For complex options/subcommands, this is a basic implementation
           if @thor_instance.respond_to?(command)
             @thor_instance.send(command, *args)
           else
