@@ -24,6 +24,7 @@ class Thor
         end
         merged_options.merge!(options)
         
+        @merged_options = merged_options
         @default_handler = merged_options[:default_handler]
         @prompt = merged_options[:prompt] || DEFAULT_PROMPT
         @history_file = File.expand_path(merged_options[:history_file] || DEFAULT_HISTORY_FILE)
@@ -33,10 +34,25 @@ class Thor
       end
 
       def start
-        show_welcome
+        # Track that we're in an interactive session
+        was_in_session = ENV['THOR_INTERACTIVE_SESSION']
+        nesting_level = ENV['THOR_INTERACTIVE_LEVEL'].to_i
+        
+        ENV['THOR_INTERACTIVE_SESSION'] = 'true'
+        ENV['THOR_INTERACTIVE_LEVEL'] = (nesting_level + 1).to_s
+        
+        # Adjust prompt for nested sessions if configured
+        display_prompt = @prompt
+        if nesting_level > 0 && @merged_options[:nested_prompt_format]
+          display_prompt = @merged_options[:nested_prompt_format] % [nesting_level + 1, @prompt]
+        elsif nesting_level > 0
+          display_prompt = "(#{nesting_level + 1}) #{@prompt}"
+        end
+        
+        show_welcome(nesting_level)
         
         loop do
-          line = Reline.readline(@prompt, true)
+          line = Reline.readline(display_prompt, true)
           break if should_exit?(line)
           
           next if line.nil? || line.strip.empty?
@@ -50,7 +66,17 @@ class Thor
         end
         
         save_history
-        puts "Goodbye!"
+        puts nesting_level > 0 ? "Exiting nested session..." : "Goodbye!"
+        
+      ensure
+        # Restore previous session state
+        if was_in_session
+          ENV['THOR_INTERACTIVE_SESSION'] = 'true'
+          ENV['THOR_INTERACTIVE_LEVEL'] = nesting_level.to_s
+        else
+          ENV.delete('THOR_INTERACTIVE_SESSION')
+          ENV.delete('THOR_INTERACTIVE_LEVEL')
+        end
       end
 
       private
@@ -160,9 +186,14 @@ class Thor
         EXIT_COMMANDS.include?(stripped)
       end
 
-      def show_welcome
-        puts "#{@thor_class.name} Interactive Shell"
-        puts "Type 'help' for available commands, 'exit' to quit"
+      def show_welcome(nesting_level = 0)
+        if nesting_level > 0
+          puts "#{@thor_class.name} Interactive Shell (nested level #{nesting_level + 1})"
+          puts "Type 'exit' to return to previous level, or 'help' for commands"
+        else
+          puts "#{@thor_class.name} Interactive Shell"
+          puts "Type 'help' for available commands, 'exit' to quit"
+        end
         puts
       end
 

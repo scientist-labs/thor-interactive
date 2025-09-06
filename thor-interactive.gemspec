@@ -10,15 +10,15 @@ Gem::Specification.new do |spec|
 
   spec.summary = "Turn any Thor CLI into an interactive REPL with persistent state and auto-completion"
   spec.description = "A gem that automatically converts Thor command-line applications into interactive REPLs, maintaining state between commands and providing auto-completion for commands and parameters."
-  spec.homepage = "https://github.com/cpetersen/thor-interactive"
+  spec.homepage = "https://github.com/scientist-labs/thor-interactive"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1.0"
 
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/cpetersen/thor-interactive"
-  spec.metadata["changelog_uri"] = "https://github.com/cpetersen/thor-interactive/blob/main/CHANGELOG.md"
+  spec.metadata["source_code_uri"] = "https://github.com/scientist-labs/thor-interactive"
+  spec.metadata["changelog_uri"] = "https://github.com/scientist-labs/thor-interactive/blob/main/CHANGELOG.md"
 
   # Specify which files should be added to the gem when it is released.
   # The `git ls-files -z` loads the files in the RubyGem that have been added into git.

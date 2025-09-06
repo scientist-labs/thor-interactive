@@ -12,6 +12,7 @@ class SampleApp < Thor
   # Configure interactive mode
   configure_interactive(
     prompt: "sample> ",
+    allow_nested: false,  # Prevent nested interactive sessions by default
     default_handler: proc do |input, thor_instance|
       # Send unrecognized input to the 'echo' command
       thor_instance.invoke(:echo, [input])

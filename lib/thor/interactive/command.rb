@@ -14,6 +14,13 @@ class Thor
           option :history_file, type: :string, desc: "Custom history file location"
           
           def interactive
+            # Check for nested sessions unless explicitly allowed
+            if ENV['THOR_INTERACTIVE_SESSION'] && !self.class.interactive_options[:allow_nested]
+              puts "Already in an interactive session."
+              puts "To allow nested sessions, configure with: configure_interactive(allow_nested: true)"
+              return
+            end
+            
             opts = self.class.interactive_options.dup
             opts[:prompt] = options[:prompt] || options["prompt"] if options[:prompt] || options["prompt"]
             opts[:history_file] = options[:history_file] || options["history_file"] if options[:history_file] || options["history_file"]
@@ -25,7 +32,7 @@ class Thor
 
       module ClassMethods
         def interactive_options
-          @interactive_options ||= {}
+          @interactive_options ||= { allow_nested: false }
         end
 
         def configure_interactive(**options)

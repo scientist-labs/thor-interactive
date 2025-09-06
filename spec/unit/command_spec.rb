@@ -52,12 +52,12 @@ RSpec.describe Thor::Interactive::Command do
   end
 
   describe ".interactive_options" do
-    it "returns empty hash by default" do
+    it "returns default options by default" do
       fresh_class = Class.new(Thor) do
         include Thor::Interactive::Command
       end
       
-      expect(fresh_class.interactive_options).to eq({})
+      expect(fresh_class.interactive_options).to eq({ allow_nested: false })
     end
 
     it "persists across multiple accesses" do
@@ -78,7 +78,7 @@ RSpec.describe Thor::Interactive::Command do
     it "creates and starts a shell with the class" do
       shell = double("shell")
       expect(Thor::Interactive::Shell).to receive(:new)
-        .with(test_class, {})
+        .with(test_class, { allow_nested: false })
         .and_return(shell)
       expect(shell).to receive(:start)
       

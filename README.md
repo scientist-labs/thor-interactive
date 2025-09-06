@@ -7,7 +7,7 @@ Thor::Interactive automatically converts your existing Thor command-line applica
 ## Features
 
 - **Zero Configuration**: Works with any existing Thor application without modifications
-- **State Persistence**: Maintains class variables and instance state between commands  
+- **State Persistence**: Maintains class variables and instance state between commands
 - **Auto-completion**: Tab completion for command names and basic parameter support
 - **Default Handlers**: Configurable fallback for non-command input
 - **Command History**: Persistent readline history with up/down arrow navigation
@@ -40,7 +40,7 @@ require 'thor/interactive'
 
 class MyApp < Thor
   include Thor::Interactive::Command
-  
+
   # Your existing Thor commands work unchanged
   desc "hello NAME", "Say hello"
   def hello(name)
@@ -55,7 +55,7 @@ Now your app supports both modes:
 # Normal CLI usage (unchanged)
 ruby myapp.rb hello World
 
-# New interactive mode  
+# New interactive mode
 ruby myapp.rb interactive
 myapp> hello Alice
 Hello Alice!
@@ -87,21 +87,21 @@ The key benefit is maintaining state between commands:
 ```ruby
 class RAGApp < Thor
   include Thor::Interactive::Command
-  
+
   # These persist between commands in interactive mode
-  class_variable_set(:@@llm_client, nil)  
+  class_variable_set(:@@llm_client, nil)
   class_variable_set(:@@conversation_history, [])
-  
+
   desc "ask TEXT", "Ask the LLM a question"
   def ask(text)
     # Initialize once, reuse across commands
     @@llm_client ||= expensive_llm_initialization
-    
+
     response = @@llm_client.chat(text)
     @@conversation_history << {input: text, output: response}
     puts response
   end
-  
+
   desc "history", "Show conversation history"
   def history
     @@conversation_history.each_with_index do |item, i|
@@ -120,7 +120,7 @@ rag> ask "What is Ruby?"
 # LLM initializes once
 Ruby is a programming language...
 
-rag> ask "Tell me more" 
+rag> ask "Tell me more"
 # LLM client reused, conversation context maintained
 Based on our previous discussion about Ruby...
 
@@ -138,15 +138,17 @@ Configure interactive behavior:
 ```ruby
 class MyApp < Thor
   include Thor::Interactive::Command
-  
+
   configure_interactive(
     prompt: "myapp> ",                    # Custom prompt
+    allow_nested: false,                  # Prevent nested sessions (default)
+    nested_prompt_format: "[L%d] %s",    # Format for nested prompts (if allowed)
     default_handler: proc do |input, thor_instance|
       # Handle unrecognized input
       thor_instance.invoke(:search, [input])
     end
   )
-  
+
   desc "search QUERY", "Search for something"
   def search(query)
     puts "Searching for: #{query}"
@@ -162,6 +164,66 @@ Hello world!
 
 myapp> some random text
 Searching for: some random text
+```
+
+### Nested Session Management
+
+By default, thor-interactive prevents nested interactive sessions to avoid confusion:
+
+```ruby
+class MyApp < Thor
+  include Thor::Interactive::Command
+
+  configure_interactive(
+    prompt: "myapp> ",
+    allow_nested: false  # Default behavior
+  )
+end
+```
+
+If you try to run `interactive` while already in an interactive session:
+
+```bash
+myapp> interactive
+Already in an interactive session.
+To allow nested sessions, configure with: configure_interactive(allow_nested: true)
+```
+
+#### Allowing Nested Sessions
+
+For advanced use cases, you can enable nested sessions:
+
+```ruby
+class AdvancedApp < Thor
+  include Thor::Interactive::Command
+
+  configure_interactive(
+    prompt: "advanced> ",
+    allow_nested: true,
+    nested_prompt_format: "[Level %d] %s"  # Optional custom format
+  )
+end
+```
+
+With nested sessions enabled:
+
+```bash
+$ ruby advanced_app.rb interactive
+AdvancedApp Interactive Shell
+Type 'help' for available commands, 'exit' to quit
+
+advanced> interactive
+AdvancedApp Interactive Shell (nested level 2)
+Type 'exit' to return to previous level, or 'help' for commands
+
+[Level 2] advanced> hello nested
+Hello nested!
+
+[Level 2] advanced> exit
+Exiting nested session...
+
+advanced> exit
+Goodbye!
 ```
 
 ## Advanced Usage
@@ -185,7 +247,7 @@ class DBApp < Thor
   configure_interactive(prompt: "db> ")
 end
 
-# API Testing CLI  
+# API Testing CLI
 class APIApp < Thor
   include Thor::Interactive::Command
   configure_interactive(prompt: "api> ")
@@ -228,7 +290,7 @@ Thor::Interactive creates a persistent instance of your Thor class and invokes c
 
 The shell provides:
 - Tab completion for command names
-- Readline history with persistent storage  
+- Readline history with persistent storage
 - Proper signal handling (Ctrl+C, Ctrl+D)
 - Help system integration
 - Configurable default handlers for non-commands
@@ -286,7 +348,7 @@ spec/
 Tests use dedicated Thor applications in `spec/support/test_thor_apps.rb`:
 
 - `SimpleTestApp` - Basic Thor app with simple commands
-- `StatefulTestApp` - App with state persistence and default handlers  
+- `StatefulTestApp` - App with state persistence and default handlers
 - `SubcommandTestApp` - App with Thor subcommands
 - `OptionsTestApp` - App with various Thor options and arguments
 
@@ -324,7 +386,7 @@ Hello Alice!
 sample> count
 Count: 1
 
-sample> count  
+sample> count
 Count: 2    # Note: state persisted!
 
 sample> add "Buy groceries"
@@ -403,7 +465,7 @@ Thor::Interactive.start(MyApp)
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/cpetersen/thor-interactive.
+Bug reports and pull requests are welcome on GitHub at https://github.com/scientist-labs/thor-interactive.
 
 ## License
 
