@@ -55,10 +55,11 @@ Now your app supports both modes:
 # Normal CLI usage (unchanged)
 ruby myapp.rb hello World
 
-# New interactive mode
+# New interactive mode with slash commands
 ruby myapp.rb interactive
-myapp> hello Alice
+myapp> /hello Alice
 Hello Alice!
+myapp> Natural language input goes to default handler
 myapp> exit
 ```
 
@@ -116,19 +117,25 @@ In interactive mode:
 ```bash
 ruby rag_app.rb interactive
 
-rag> ask "What is Ruby?"
-# LLM initializes once
+rag> /ask What is Ruby?
+# LLM initializes once  
 Ruby is a programming language...
 
-rag> ask "Tell me more"
+rag> /ask Tell me more
 # LLM client reused, conversation context maintained
 Based on our previous discussion about Ruby...
 
-rag> history
+rag> What's the difference between Ruby and Python?
+# Natural language goes directly to default handler (ask command)
+Ruby and Python differ in several ways...
+
+rag> /history  
 1. Q: What is Ruby?
    A: Ruby is a programming language...
 2. Q: Tell me more
    A: Based on our previous discussion about Ruby...
+3. Q: What's the difference between Ruby and Python?
+   A: Ruby and Python differ in several ways...
 ```
 
 ## Configuration
