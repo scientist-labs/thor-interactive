@@ -192,6 +192,7 @@ RSpec.describe Thor::Interactive::Shell do
     it "saves history on exit" do
       with_temp_history_file do |path|
         allow(Reline::HISTORY).to receive(:to_a).and_return(["cmd1", "cmd2"])
+        allow(Reline::HISTORY).to receive(:size).and_return(2)  # Override global mock
         allow(File).to receive(:write)
         
         test_shell = described_class.new(SimpleTestApp, history_file: path)

@@ -219,7 +219,7 @@ RSpec.describe "Shell Integration" do
     it "starts shell with given Thor class" do
       shell = double("shell")
       expect(Thor::Interactive::Shell).to receive(:new)
-        .with(SimpleTestApp)
+        .with(SimpleTestApp, {})
         .and_return(shell)
       expect(shell).to receive(:start)
 

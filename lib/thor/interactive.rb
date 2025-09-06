@@ -9,8 +9,8 @@ class Thor
     class Error < StandardError; end
     
     # Convenience method to start an interactive shell
-    def self.start(thor_class, **options)
-      Shell.new(thor_class, **options).start
+    def self.start(thor_class, options = {})
+      Shell.new(thor_class, options).start
     end
   end
 end

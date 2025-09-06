@@ -15,10 +15,10 @@ class Thor
           
           def interactive
             opts = self.class.interactive_options.dup
-            opts[:prompt] = options[:prompt] if options[:prompt]
-            opts[:history_file] = options[:history_file] if options[:history_file]
+            opts[:prompt] = options[:prompt] || options["prompt"] if options[:prompt] || options["prompt"]
+            opts[:history_file] = options[:history_file] || options["history_file"] if options[:history_file] || options["history_file"]
             
-            Thor::Interactive::Shell.new(self.class, **opts).start
+            Thor::Interactive::Shell.new(self.class, opts).start
           end
         end
       end

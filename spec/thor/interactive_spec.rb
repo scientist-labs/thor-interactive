@@ -18,7 +18,7 @@ RSpec.describe Thor::Interactive do
     it "creates and starts a shell" do
       shell = double("shell")
       expect(Thor::Interactive::Shell).to receive(:new)
-        .with(test_thor_class)
+        .with(test_thor_class, {})
         .and_return(shell)
       expect(shell).to receive(:start)
 

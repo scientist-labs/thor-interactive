@@ -13,7 +13,7 @@ class Thor
 
       attr_reader :thor_class, :thor_instance, :prompt
 
-      def initialize(thor_class, **options)
+      def initialize(thor_class, options = {})
         @thor_class = thor_class
         @thor_instance = thor_class.new
         
