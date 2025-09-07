@@ -1,5 +1,28 @@
 # frozen_string_literal: true
 
+require "simplecov"
+
+SimpleCov.start do
+  # Coverage configuration  
+  minimum_coverage 60
+  
+  # Exclude files that don't need coverage
+  add_filter "/spec/"
+  add_filter "/examples/"
+  add_filter "version.rb"
+  
+  # Group coverage results
+  add_group "Core", "lib/thor/interactive"
+  add_group "Shell", "lib/thor/interactive/shell.rb"
+  add_group "Command", "lib/thor/interactive/command.rb"
+  
+  # Track branches for more thorough coverage
+  enable_coverage :branch
+  
+  # Output formats
+  formatter SimpleCov::Formatter::HTMLFormatter
+end
+
 require "thor/interactive"
 require_relative "support/test_thor_apps"
 require_relative "support/capture_helpers"

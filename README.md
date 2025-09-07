@@ -335,13 +335,14 @@ After checking out the repo:
 
 ```bash
 bundle install           # Install dependencies
-bundle exec rspec        # Run full test suite
+bundle exec rspec        # Run full test suite with coverage
 bundle exec rake build   # Build gem
+open coverage/index.html # View coverage report (after running tests)
 ```
 
 ### Testing
 
-The gem includes comprehensive tests organized into unit and integration test suites:
+The gem includes comprehensive tests organized into unit and integration test suites with **72%+ code coverage**:
 
 ```bash
 # Run all tests
@@ -349,6 +350,9 @@ bundle exec rspec
 
 # Run with detailed output
 bundle exec rspec --format documentation
+
+# View coverage report
+open coverage/index.html      # Detailed HTML coverage report
 
 # Run specific test suites
 bundle exec rspec spec/unit/           # Unit tests only
