@@ -68,7 +68,7 @@ RSpec.describe Thor::Interactive::Shell do
         shell.send(:process_input, "unknown_command")
       end
       
-      expect(output).to include("Unknown command: 'unknown_command'")
+      expect(output).to include("Use /command for commands")
     end
 
     it "handles Thor errors gracefully" do
@@ -149,7 +149,7 @@ RSpec.describe Thor::Interactive::Shell do
         shell.send(:show_help)
       end
       
-      expect(output).to include("Available commands:")
+      expect(output).to include("Available commands (prefix with /):")
       expect(output).to include("hello")
       expect(output).to include("echo")
       expect(output).to include("Special commands:")

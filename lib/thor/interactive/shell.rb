@@ -143,42 +143,10 @@ class Thor
         # Handle completely empty input
         return if input.nil? || input.strip.empty?
 
-        # Check if input starts with / for command mode
+        # Check if input starts with / for explicit command mode
         if input.strip.start_with?('/')
-          # Command mode: /command args
-          command_input = input.strip[1..-1] # Remove leading /
-          return if command_input.empty?
-          
-          # Extract command and check if it's a single-text command
-          command_word = command_input.split(/\s+/, 2).first
-          
-          if thor_command?(command_word)
-            task = @thor_class.tasks[command_word]
-            
-            if task && single_text_command?(task)
-              # Single text command - pass everything after command as one argument
-              text_part = command_input.sub(/^#{Regexp.escape(command_word)}\s*/, '')
-              if text_part.empty?
-                invoke_thor_command(command_word, [])
-              else
-                invoke_thor_command(command_word, [text_part])
-              end
-            else
-              # Multi-argument command, use proper parsing
-              args = safe_parse_input(command_input)
-              if args && !args.empty?
-                command = args.shift
-                invoke_thor_command(command, args)
-              else
-                # Parsing failed, try simple split
-                parts = command_input.split(/\s+/)
-                command = parts.shift
-                invoke_thor_command(command, parts)
-              end
-            end
-          else
-            puts "Unknown command: '#{command_word}'. Type '/help' for available commands."
-          end
+          # Explicit command mode: /command args
+          handle_slash_command(input.strip[1..-1])
         elsif is_help_request?(input)
           # Special case: treat bare "help" as /help for convenience
           if input.strip.split.length == 1
@@ -187,18 +155,64 @@ class Thor
             command_part = input.strip.split[1] 
             show_help(command_part)
           end
-        elsif @default_handler
-          # Natural language mode: send whole input to default handler
-          begin
-            @default_handler.call(input, @thor_instance)
-          rescue => e
-            puts "Error in default handler: #{e.message}"
-            puts "Input was: #{input}"
-            puts "Try using /commands or type '/help' for available commands."
+        else
+          # Determine if this looks like a command or natural language
+          command_word = input.strip.split(/\s+/, 2).first
+          
+          if thor_command?(command_word)
+            # Looks like a command - handle it as a command (backward compatibility)
+            handle_command(input.strip)
+          elsif @default_handler
+            # Natural language mode: send whole input to default handler
+            begin
+              @default_handler.call(input, @thor_instance)
+            rescue => e
+              puts "Error in default handler: #{e.message}"
+              puts "Input was: #{input}"
+              puts "Try using /commands or type '/help' for available commands."
+            end
+          else
+            # No default handler, suggest using command mode
+            puts "No default handler configured. Use /command for commands, or type '/help' for available commands."
+          end
+        end
+      end
+
+      def handle_slash_command(command_input)
+        return if command_input.empty?
+        handle_command(command_input)
+      end
+
+      def handle_command(command_input)
+        # Extract command and check if it's a single-text command
+        command_word = command_input.split(/\s+/, 2).first
+        
+        if thor_command?(command_word)
+          task = @thor_class.tasks[command_word]
+          
+          if task && single_text_command?(task)
+            # Single text command - pass everything after command as one argument
+            text_part = command_input.sub(/^#{Regexp.escape(command_word)}\s*/, '')
+            if text_part.empty?
+              invoke_thor_command(command_word, [])
+            else
+              invoke_thor_command(command_word, [text_part])
+            end
+          else
+            # Multi-argument command, use proper parsing
+            args = safe_parse_input(command_input)
+            if args && !args.empty?
+              command = args.shift
+              invoke_thor_command(command, args)
+            else
+              # Parsing failed, try simple split
+              parts = command_input.split(/\s+/)
+              command = parts.shift
+              invoke_thor_command(command, parts)
+            end
           end
         else
-          # No default handler, suggest using command mode
-          puts "No default handler configured. Use /command for commands, or type '/help' for available commands."
+          puts "Unknown command: '#{command_word}'. Type '/help' for available commands."
         end
       end
 

@@ -132,12 +132,12 @@ RSpec.describe "Shell Integration" do
     it "shows help for all commands" do
       output = capture_stdout { shell.send(:process_input, "help") }
       
-      expect(output).to include("Available commands:")
+      expect(output).to include("Available commands (prefix with /):")
       expect(output).to include("count")
       expect(output).to include("add")
       expect(output).to include("list")
       expect(output).to include("Special commands:")
-      expect(output).to include("exit/quit/q")
+      expect(output).to include("/exit, /quit, /q")
     end
 
     it "integrates with Thor's help system" do
