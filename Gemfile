@@ -12,3 +12,9 @@ gem "rspec", "~> 3.0"
 gem "simplecov", "~> 0.22", require: false
 
 gem "standard", "~> 1.3"
+
+# Performance and concurrency testing
+gem "rspec-benchmark", "~> 0.6"
+gem "memory_profiler", "~> 1.0"
+gem "concurrent-ruby", "~> 1.2"
+gem "timeout", "~> 0.4"
