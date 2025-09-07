@@ -266,12 +266,13 @@ class Thor
         if command == "help"
           show_help(args.first)
         else
-          # For simple commands, call directly for state persistence
-          # For complex options/subcommands, this is a basic implementation
+          # Always use direct method calls to avoid Thor's invoke deduplication
+          # Thor's invoke method silently fails on subsequent calls to the same method
           if @thor_instance.respond_to?(command)
             @thor_instance.send(command, *args)
           else
-            @thor_instance.invoke(command, args)
+            # If method doesn't exist, this will raise a proper error
+            @thor_instance.send(command, *args)
           end
         end
       rescue SystemExit => e

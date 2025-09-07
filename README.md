@@ -152,7 +152,10 @@ class MyApp < Thor
     nested_prompt_format: "[L%d] %s",    # Format for nested prompts (if allowed)
     default_handler: proc do |input, thor_instance|
       # Handle unrecognized input
-      thor_instance.invoke(:search, [input])
+      # IMPORTANT: Use direct method calls, NOT invoke(), to avoid Thor's
+      # silent failure on repeated calls to the same method
+      thor_instance.search(input)  # ✅ Works repeatedly
+      # thor_instance.invoke(:search, [input])  # ❌ Fails after first call
     end
   )
 
@@ -232,6 +235,28 @@ Exiting nested session...
 advanced> exit
 Goodbye!
 ```
+
+### ⚠️ Important: Default Handler Implementation
+
+**Always use direct method calls in default handlers, NOT `invoke()`:**
+
+```ruby
+# ✅ CORRECT - Works for repeated calls
+configure_interactive(
+  default_handler: proc do |input, thor_instance|
+    thor_instance.ask(input)  # Direct method call
+  end
+)
+
+# ❌ WRONG - Silent failure after first call  
+configure_interactive(
+  default_handler: proc do |input, thor_instance|
+    thor_instance.invoke(:ask, [input])  # Thor's invoke fails silently on repeat calls
+  end
+)
+```
+
+**Why:** Thor's `invoke` method has internal deduplication that prevents repeated calls to the same method on the same instance. This causes silent failures in interactive mode where users expect to be able to repeat commands.
 
 ## Advanced Usage
 

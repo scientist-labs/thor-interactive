@@ -15,7 +15,9 @@ class SampleApp < Thor
     allow_nested: false,  # Prevent nested interactive sessions by default
     default_handler: proc do |input, thor_instance|
       # Send unrecognized input to the 'echo' command
-      thor_instance.echo(input)  # Use direct method call for better reliability
+      # IMPORTANT: Use direct method calls, NOT invoke(), to avoid Thor's
+      # silent deduplication that prevents repeated calls to the same method
+      thor_instance.echo(input)
     end
   )
 
