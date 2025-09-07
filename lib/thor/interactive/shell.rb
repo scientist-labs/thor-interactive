@@ -41,6 +41,8 @@ class Thor
         ENV['THOR_INTERACTIVE_SESSION'] = 'true'
         ENV['THOR_INTERACTIVE_LEVEL'] = (nesting_level + 1).to_s
         
+        puts "(Debug: Interactive session started, level #{nesting_level + 1})" if ENV["DEBUG"]
+        
         # Adjust prompt for nested sessions if configured
         display_prompt = @prompt
         if nesting_level > 0 && @merged_options[:nested_prompt_format]
@@ -51,20 +53,37 @@ class Thor
         
         show_welcome(nesting_level)
         
+        puts "(Debug: Entering main loop)" if ENV["DEBUG"]
+        
         loop do
           line = Reline.readline(display_prompt, true)
-          break if should_exit?(line)
+          puts "(Debug: Got input: #{line.inspect})" if ENV["DEBUG"]
+          
+          if should_exit?(line)
+            puts "(Debug: Exit condition met)" if ENV["DEBUG"]
+            break
+          end
           
           next if line.nil? || line.strip.empty?
           
-          process_input(line.strip)
-        rescue Interrupt
-          puts "\n(Interrupted - press Ctrl+D or type 'exit' to quit)"
-        rescue => e
-          puts "Error: #{e.message}"
-          puts e.backtrace.first(3) if ENV["DEBUG"]
+          begin
+            puts "(Debug: Processing input: #{line.strip})" if ENV["DEBUG"]
+            process_input(line.strip)
+            puts "(Debug: Input processed successfully)" if ENV["DEBUG"]
+          rescue Interrupt
+            puts "\n(Interrupted - press Ctrl+D or type 'exit' to quit)"
+          rescue SystemExit => e
+            puts "A command tried to exit with code #{e.status}. Staying in interactive mode."
+            puts "(Debug: SystemExit caught in main loop)" if ENV["DEBUG"]
+          rescue => e
+            puts "Error in main loop: #{e.message}"
+            puts e.backtrace.first(5) if ENV["DEBUG"]
+            puts "(Debug: Error handled, continuing loop)" if ENV["DEBUG"]
+            # Continue the loop - don't let errors break the session
+          end
         end
         
+        puts "(Debug: Exited main loop)" if ENV["DEBUG"]
         save_history
         puts nesting_level > 0 ? "Exiting nested session..." : "Goodbye!"
         
@@ -160,6 +179,14 @@ class Thor
           else
             puts "Unknown command: '#{command_word}'. Type '/help' for available commands."
           end
+        elsif is_help_request?(input)
+          # Special case: treat bare "help" as /help for convenience
+          if input.strip.split.length == 1
+            show_help
+          else
+            command_part = input.strip.split[1] 
+            show_help(command_part)
+          end
         elsif @default_handler
           # Natural language mode: send whole input to default handler
           begin
@@ -167,6 +194,7 @@ class Thor
           rescue => e
             puts "Error in default handler: #{e.message}"
             puts "Input was: #{input}"
+            puts "Try using /commands or type '/help' for available commands."
           end
         else
           # No default handler, suggest using command mode
@@ -221,6 +249,12 @@ class Thor
         false
       end
 
+      def is_help_request?(input)
+        # Check if input is a help request (help, ?, etc.)
+        stripped = input.strip.downcase
+        stripped == "help" || stripped.start_with?("help ")
+      end
+
       def thor_command?(command)
         @thor_class.tasks.key?(command) || 
         @thor_class.subcommand_classes.key?(command) ||
@@ -240,6 +274,13 @@ class Thor
             @thor_instance.invoke(command, args)
           end
         end
+      rescue SystemExit => e
+        if e.status == 0
+          puts "Command completed successfully (would have exited with code 0 in CLI mode)"
+        else
+          puts "Command failed with exit code #{e.status}"
+        end
+        puts "(Use 'exit' or Ctrl+D to exit the interactive session)" if ENV["DEBUG"]
       rescue Thor::Error => e
         puts "Thor Error: #{e.message}"
       rescue ArgumentError => e
@@ -247,6 +288,7 @@ class Thor
         puts "Try: help #{command}" if thor_command?(command)
       rescue StandardError => e
         puts "Error: #{e.message}"
+        puts "Command: #{command}, Args: #{args.inspect}" if ENV["DEBUG"]
       end
 
       def show_help(command = nil)
@@ -269,6 +311,13 @@ class Thor
             puts "Use /command syntax for all commands"
           end
           puts
+          if ENV["DEBUG"]
+            puts "Debug info:"
+            puts "  Thor class: #{@thor_class.name}"
+            puts "  Available tasks: #{@thor_class.tasks.keys.sort}"
+            puts "  Instance methods: #{@thor_instance.methods.grep(/^[a-z]/).sort}" if @thor_instance
+            puts
+          end
         end
       end
 
