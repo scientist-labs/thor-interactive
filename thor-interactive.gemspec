@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require_relative "lib/thor/interactive/version"
+require_relative "lib/thor/interactive/version_constant"
 
 Gem::Specification.new do |spec|
   spec.name = "thor-interactive"
-  spec.version = Thor::Interactive::VERSION
+  spec.version = ThorInteractive::VERSION
   spec.authors = ["Chris Petersen"]
   spec.email = ["chris@petersen.io"]
 

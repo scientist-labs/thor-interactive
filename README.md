@@ -55,10 +55,11 @@ Now your app supports both modes:
 # Normal CLI usage (unchanged)
 ruby myapp.rb hello World
 
-# New interactive mode
+# New interactive mode with slash commands
 ruby myapp.rb interactive
-myapp> hello Alice
+myapp> /hello Alice
 Hello Alice!
+myapp> Natural language input goes to default handler
 myapp> exit
 ```
 
@@ -116,19 +117,25 @@ In interactive mode:
 ```bash
 ruby rag_app.rb interactive
 
-rag> ask "What is Ruby?"
-# LLM initializes once
+rag> /ask What is Ruby?
+# LLM initializes once  
 Ruby is a programming language...
 
-rag> ask "Tell me more"
+rag> /ask Tell me more
 # LLM client reused, conversation context maintained
 Based on our previous discussion about Ruby...
 
-rag> history
+rag> What's the difference between Ruby and Python?
+# Natural language goes directly to default handler (ask command)
+Ruby and Python differ in several ways...
+
+rag> /history  
 1. Q: What is Ruby?
    A: Ruby is a programming language...
 2. Q: Tell me more
    A: Based on our previous discussion about Ruby...
+3. Q: What's the difference between Ruby and Python?
+   A: Ruby and Python differ in several ways...
 ```
 
 ## Configuration
@@ -145,7 +152,10 @@ class MyApp < Thor
     nested_prompt_format: "[L%d] %s",    # Format for nested prompts (if allowed)
     default_handler: proc do |input, thor_instance|
       # Handle unrecognized input
-      thor_instance.invoke(:search, [input])
+      # IMPORTANT: Use direct method calls, NOT invoke(), to avoid Thor's
+      # silent failure on repeated calls to the same method
+      thor_instance.search(input)  # ✅ Works repeatedly
+      # thor_instance.invoke(:search, [input])  # ❌ Fails after first call
     end
   )
 
@@ -226,6 +236,28 @@ advanced> exit
 Goodbye!
 ```
 
+### ⚠️ Important: Default Handler Implementation
+
+**Always use direct method calls in default handlers, NOT `invoke()`:**
+
+```ruby
+# ✅ CORRECT - Works for repeated calls
+configure_interactive(
+  default_handler: proc do |input, thor_instance|
+    thor_instance.ask(input)  # Direct method call
+  end
+)
+
+# ❌ WRONG - Silent failure after first call  
+configure_interactive(
+  default_handler: proc do |input, thor_instance|
+    thor_instance.invoke(:ask, [input])  # Thor's invoke fails silently on repeat calls
+  end
+)
+```
+
+**Why:** Thor's `invoke` method has internal deduplication that prevents repeated calls to the same method on the same instance. This causes silent failures in interactive mode where users expect to be able to repeat commands.
+
 ## Advanced Usage
 
 ### Custom Options
@@ -303,13 +335,14 @@ After checking out the repo:
 
 ```bash
 bundle install           # Install dependencies
-bundle exec rspec        # Run full test suite
+bundle exec rspec        # Run full test suite with coverage
 bundle exec rake build   # Build gem
+open coverage/index.html # View coverage report (after running tests)
 ```
 
 ### Testing
 
-The gem includes comprehensive tests organized into unit and integration test suites:
+The gem includes comprehensive tests organized into unit and integration test suites with **72%+ code coverage**:
 
 ```bash
 # Run all tests
@@ -317,6 +350,9 @@ bundle exec rspec
 
 # Run with detailed output
 bundle exec rspec --format documentation
+
+# View coverage report
+open coverage/index.html      # Detailed HTML coverage report
 
 # Run specific test suites
 bundle exec rspec spec/unit/           # Unit tests only

@@ -72,9 +72,9 @@ RSpec.describe "Completion System" do
       # Create a new shell to capture the proc
       Thor::Interactive::Shell.new(SimpleTestApp)
       
-      # Test the completion proc
-      completions = completion_proc.call("h", "")
-      expect(completions).to include("hello")
+      # Test the completion proc with slash prefix
+      completions = completion_proc.call("h", "/")
+      expect(completions).to include("/hello")
     end
 
     it "completion proc handles empty preposing" do
@@ -85,8 +85,8 @@ RSpec.describe "Completion System" do
       
       Thor::Interactive::Shell.new(SimpleTestApp)
       
-      completions = completion_proc.call("e", "")
-      expect(completions).to include("echo", "exit")
+      completions = completion_proc.call("e", "/")
+      expect(completions).to include("/echo", "/exit")
     end
 
     it "completion proc returns empty for options (basic implementation)" do

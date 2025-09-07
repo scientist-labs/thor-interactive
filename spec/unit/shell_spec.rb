@@ -54,12 +54,13 @@ RSpec.describe Thor::Interactive::Shell do
       }.not_to raise_error
     end
 
-    it "handles malformed shell input" do
+    it "handles malformed shell input gracefully" do
       output = capture_stdout do
         shell.send(:process_input, 'hello "unclosed quote')
       end
       
-      expect(output).to include("Error parsing input")
+      # Should now handle gracefully and execute the command
+      expect(output).to include('Hello "unclosed quote!')
     end
 
     it "shows error message for unknown commands without default handler" do
@@ -67,7 +68,7 @@ RSpec.describe Thor::Interactive::Shell do
         shell.send(:process_input, "unknown_command")
       end
       
-      expect(output).to include("Unknown command: 'unknown_command'")
+      expect(output).to include("Use /command for commands")
     end
 
     it "handles Thor errors gracefully" do
@@ -148,7 +149,7 @@ RSpec.describe Thor::Interactive::Shell do
         shell.send(:show_help)
       end
       
-      expect(output).to include("Available commands:")
+      expect(output).to include("Available commands (prefix with /):")
       expect(output).to include("hello")
       expect(output).to include("echo")
       expect(output).to include("Special commands:")

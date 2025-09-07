@@ -26,49 +26,55 @@ ruby sample_app.rb interactive
 Once in interactive mode:
 
 ```
-sample> hello Alice
+sample> /hello Alice
 Hello Alice!
 
-sample> count
+sample> /count
 Count: 1
 
-sample> count  
+sample> /count  
 Count: 2
 
-sample> add "First item"
+sample> /add First item
 Added 'First item'. Total items: 1
 
-sample> add "Second item"  
+sample> /add Second item  
 Added 'Second item'. Total items: 2
 
-sample> list
+sample> /list
 Items:
   1. First item
   2. Second item
 
-sample> status
+sample> /status
 Application Status:
   Counter: 2
   Items in list: 2
   Memory usage: 15234 KB
 
-sample> This is unrecognized text
-Echo: This is unrecognized text
+sample> This is unrecognized text that doesn't need quotes
+Echo: This is unrecognized text that doesn't need quotes
 
-sample> help
-Available commands:
-  hello                Say hello to NAME
-  count                Show and increment counter (demonstrates state persistence)
-  add                  Add item to list (demonstrates state persistence)
-  list                 Show all items
-  clear                Clear all items
-  echo                 Echo the text back (used as default handler)
-  status               Show application status
-  interactive          Start an interactive REPL for this application
+sample> What about text with "quotes" and apostrophes?
+Echo: What about text with "quotes" and apostrophes?
+
+sample> /help
+Available commands (prefix with /):
+  /hello               Say hello to NAME
+  /count               Show and increment counter (demonstrates state persistence)
+  /add                 Add item to list (demonstrates state persistence)
+  /list                Show all items
+  /clear               Clear all items
+  /echo                Echo the text back (used as default handler)
+  /status              Show application status
+  /interactive         Start an interactive REPL for this application
 
 Special commands:
-  help [COMMAND]       Show help for command
-  exit/quit/q          Exit the REPL
+  /help [COMMAND]      Show help for command
+  /exit, /quit, /q     Exit the REPL
+
+Natural language mode:
+  Type anything without / to use default handler
 
 sample> exit
 Goodbye!
@@ -81,16 +87,17 @@ Goodbye!
 - In normal CLI mode, each command starts fresh
 
 ### 2. Auto-completion
-- Tab completion works for command names
-- Try typing `h<TAB>` or `a<TAB>` to see completions
+- Tab completion works for command names with slash prefix
+- Try typing `/h<TAB>` or `/co<TAB>` to see completions
 
-### 3. Default Handler
-- Text that doesn't match a command gets sent to the `echo` command
-- This is configurable via the `default_handler` option
+### 3. Natural Language Mode
+- Text without `/` prefix gets sent to the configured default handler
+- No need to worry about quoting or escaping in natural language
+- Perfect for LLM interfaces and conversational commands
 
 ### 4. Built-in Help
-- `help` shows all available commands
-- `help COMMAND` shows help for a specific command
+- `/help` shows all available commands  
+- `/help COMMAND` shows help for a specific command
 
 ### 5. History
 - Up/down arrows navigate command history
@@ -98,7 +105,7 @@ Goodbye!
 
 ### 6. Graceful Exit
 - Ctrl+C interrupts current operation
-- Ctrl+D or `exit`/`quit`/`q` exits the REPL
+- Ctrl+D, `exit`, `quit`, `q`, `/exit`, `/quit`, or `/q` exits the REPL
 
 ## Integration Patterns
 

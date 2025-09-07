@@ -38,6 +38,16 @@ class Thor
         def configure_interactive(**options)
           interactive_options.merge!(options)
         end
+
+        # Check if currently running in interactive mode
+        def interactive?
+          ENV['THOR_INTERACTIVE_SESSION'] == 'true'
+        end
+      end
+
+      # Instance method version for use in commands
+      def interactive?
+        self.class.interactive?
       end
     end
   end

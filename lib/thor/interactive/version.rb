@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
 require "thor"
+require_relative "version_constant"
 
 class Thor
   module Interactive
-    VERSION = "0.1.0.pre.1"
+    VERSION = ThorInteractive::VERSION
   end
 end
