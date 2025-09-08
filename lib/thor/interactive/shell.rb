@@ -29,6 +29,11 @@ class Thor
         @prompt = merged_options[:prompt] || DEFAULT_PROMPT
         @history_file = File.expand_path(merged_options[:history_file] || DEFAULT_HISTORY_FILE)
         
+        # Ctrl-C handling configuration
+        @ctrl_c_behavior = merged_options[:ctrl_c_behavior] || :clear_prompt
+        @double_ctrl_c_timeout = merged_options[:double_ctrl_c_timeout] || 0.5
+        @last_interrupt_time = nil
+        
         setup_completion
         load_history
       end
@@ -56,27 +61,36 @@ class Thor
         puts "(Debug: Entering main loop)" if ENV["DEBUG"]
         
         loop do
-          line = Reline.readline(display_prompt, true)
-          puts "(Debug: Got input: #{line.inspect})" if ENV["DEBUG"]
-          
-          if should_exit?(line)
-            puts "(Debug: Exit condition met)" if ENV["DEBUG"]
-            break
-          end
-          
-          next if line.nil? || line.strip.empty?
-          
           begin
+            line = Reline.readline(display_prompt, true)
+            puts "(Debug: Got input: #{line.inspect})" if ENV["DEBUG"]
+            
+            # Reset interrupt tracking on successful input
+            @last_interrupt_time = nil if line
+            
+            if should_exit?(line)
+              puts "(Debug: Exit condition met)" if ENV["DEBUG"]
+              break
+            end
+            
+            next if line.nil? || line.strip.empty?
+            
             puts "(Debug: Processing input: #{line.strip})" if ENV["DEBUG"]
             process_input(line.strip)
             puts "(Debug: Input processed successfully)" if ENV["DEBUG"]
+            
           rescue Interrupt
-            puts "\n(Interrupted - press Ctrl+D or type 'exit' to quit)"
+            # Handle Ctrl-C
+            if handle_interrupt
+              break  # Exit on double Ctrl-C
+            end
+            next  # Continue on single Ctrl-C
+            
           rescue SystemExit => e
             puts "A command tried to exit with code #{e.status}. Staying in interactive mode."
             puts "(Debug: SystemExit caught in main loop)" if ENV["DEBUG"]
           rescue => e
-            puts "Error in main loop: #{e.message}"
+            puts "Error: #{e.message}"
             puts e.backtrace.first(5) if ENV["DEBUG"]
             puts "(Debug: Error handled, continuing loop)" if ENV["DEBUG"]
             # Continue the loop - don't let errors break the session
@@ -342,6 +356,36 @@ class Thor
         stripped = line.strip.downcase
         # Handle both /exit and exit for convenience
         EXIT_COMMANDS.include?(stripped) || EXIT_COMMANDS.include?(stripped.sub(/^\//, ''))
+      end
+      
+      def handle_interrupt
+        current_time = Time.now
+        
+        # Check for double Ctrl-C
+        if @last_interrupt_time && (current_time - @last_interrupt_time) < @double_ctrl_c_timeout
+          puts "\n(Interrupted twice - exiting)"
+          return true  # Signal to exit
+        end
+        
+        @last_interrupt_time = current_time
+        
+        # Single Ctrl-C behavior
+        case @ctrl_c_behavior
+        when :clear_prompt
+          puts "^C"
+          puts "(Press Ctrl-C again quickly or Ctrl-D to exit)"
+        when :show_help
+          puts "\n^C - Interrupt"
+          puts "Press Ctrl-C again to exit, or type 'help' for commands"
+        when :silent
+          # Just clear the line, no message
+          print "\r#{' ' * 80}\r"
+        else
+          # Default behavior
+          puts "^C"
+        end
+        
+        false  # Don't exit, just clear prompt
       end
 
       def show_welcome(nesting_level = 0)
