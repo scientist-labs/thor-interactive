@@ -3,12 +3,13 @@
 # Helper methods for capturing output and simulating input during tests
 
 module CaptureHelpers
-  # Capture stdout output
+  # Capture stdout output (thread-safe version)
   def capture_stdout(&block)
     old_stdout = $stdout
-    $stdout = StringIO.new
+    captured = StringIO.new
+    $stdout = captured
     block.call
-    $stdout.string
+    captured.string
   ensure
     $stdout = old_stdout
   end
