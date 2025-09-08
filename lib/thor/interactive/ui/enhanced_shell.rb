@@ -2,6 +2,7 @@
 
 require_relative "components/input_area"
 require_relative "components/mode_indicator"
+require_relative "components/smart_input"
 
 class Thor
   module Interactive
@@ -29,6 +30,12 @@ class Thor
         private
         
         def setup_enhanced_input
+          # Use SmartInput for better multi-line handling
+          @smart_input = Components::SmartInput.new(
+            auto_multiline: @merged_options[:auto_multiline] != false,
+            multiline_threshold: @merged_options[:multiline_threshold] || 2
+          )
+          
           @input_area = Components::InputArea.new(
             height: @merged_options[:input_height] || 5,
             show_line_numbers: @merged_options[:show_line_numbers] || false,
@@ -84,24 +91,41 @@ class Thor
         end
         
         def read_enhanced_input
-          # Determine if we should use multi-line based on context
           prompt = format_prompt
           
-          # Check if last input suggests multi-line continuation
-          if should_use_multiline?
+          # Use SmartInput if available for better multi-line handling
+          if @smart_input
+            @smart_input.read(prompt)
+          elsif should_use_multiline?
             @input_area.read_multiline(prompt)
           else
-            # Try to read single line first
+            # Fallback to standard Reline
             input = Reline.readline(prompt, true)
             
             # If input ends with continuation marker, switch to multi-line
             if input&.end_with?("\\")
               input.chomp!("\\")
-              input + "\n" + @input_area.read_multiline("... ")
+              input + "\n" + read_continuation_lines
             else
               input
             end
           end
+        end
+        
+        def read_continuation_lines
+          lines = []
+          loop do
+            line = Reline.readline("... ", true)
+            break if line.nil? || (line.strip.empty? && !lines.empty?)
+            
+            if line.end_with?("\\")
+              lines << line.chomp("\\")
+            else
+              lines << line
+              break
+            end
+          end
+          lines.join("\n")
         end
         
         def should_use_multiline?
