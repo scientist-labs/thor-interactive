@@ -8,6 +8,7 @@ class Thor
       autoload :Config, "thor/interactive/ui/config"
       autoload :Components, "thor/interactive/ui/components"
       autoload :FeatureDetection, "thor/interactive/ui/feature_detection"
+      autoload :EnhancedShell, "thor/interactive/ui/enhanced_shell"
       
       class << self
         attr_accessor :config

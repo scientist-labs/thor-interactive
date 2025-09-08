@@ -99,6 +99,102 @@ class Thor
       def update_status(message)
         UI.renderer.update_status(message) if self.class.interactive_ui?
       end
+      
+      # New Phase 3 status API methods
+      def status_bar
+        @status_bar ||= UI::Components::StatusBar.new if self.class.interactive_ui?
+      end
+      
+      def set_status(key, value, options = {})
+        status_bar&.set(key, value, options)
+      end
+      
+      def clear_status(key = nil)
+        if key
+          status_bar&.remove(key)
+        else
+          status_bar&.clear
+        end
+      end
+      
+      def with_status(message, &block)
+        if status_bar
+          set_status(:task, message, color: :cyan)
+          begin
+            result = yield
+            set_status(:task, "✓ #{message}", color: :green)
+            result
+          rescue => e
+            set_status(:task, "✗ #{message}", color: :red)
+            raise e
+          ensure
+            sleep(0.5) # Brief pause to show final status
+            clear_status(:task)
+          end
+        else
+          yield
+        end
+      end
+      
+      # Animation API
+      def animation_engine
+        @animation_engine ||= UI::Components::AnimationEngine.new if self.class.interactive_ui?
+      end
+      
+      def with_animation(type: :spinner, style: :dots, message: nil, &block)
+        if animation_engine
+          animation_engine.with_animation(type: type, style: style, message: message, &block)
+        else
+          yield
+        end
+      end
+      
+      def animate_text(text, type: :typing)
+        if animation_engine
+          animation_engine.text_animation(text, type: type)
+        else
+          puts text
+        end
+      end
+      
+      # Progress tracking API
+      def progress_tracker
+        @progress_tracker ||= UI::Components::ProgressTracker.new(
+          status_bar: status_bar
+        ) if self.class.interactive_ui?
+      end
+      
+      def track_progress(name, total: 100, &block)
+        if progress_tracker
+          progress_tracker.with_task(name, total: total, &block)
+        else
+          yield
+        end
+      end
+      
+      def register_task(id, name, options = {})
+        progress_tracker&.register_task(id, name, options)
+      end
+      
+      def start_task(id)
+        progress_tracker&.start_task(id)
+      end
+      
+      def update_task_progress(id, progress, message = nil)
+        progress_tracker&.update_progress(id, progress, message)
+      end
+      
+      def complete_task(id, message = nil)
+        progress_tracker&.complete_task(id, message)
+      end
+      
+      def error_task(id, error_message)
+        progress_tracker&.error_task(id, error_message)
+      end
+      
+      def progress_summary
+        progress_tracker&.summary || {}
+      end
     end
   end
 end
