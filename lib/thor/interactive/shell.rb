@@ -205,8 +205,8 @@ class Thor
         if thor_command?(command_word)
           task = @thor_class.tasks[command_word]
           
-          if task && single_text_command?(task)
-            # Single text command - pass everything after command as one argument
+          if task && single_text_command?(task) && !task.options.any?
+            # Single text command without options - pass everything after command as one argument
             text_part = command_input.sub(/^#{Regexp.escape(command_word)}\s*/, '')
             if text_part.empty?
               invoke_thor_command(command_word, [])
@@ -295,13 +295,29 @@ class Thor
         if command == "help"
           show_help(args.first)
         else
-          # Always use direct method calls to avoid Thor's invoke deduplication
-          # Thor's invoke method silently fails on subsequent calls to the same method
-          if @thor_instance.respond_to?(command)
-            @thor_instance.send(command, *args)
+          # Get the Thor task/command definition
+          task = @thor_class.tasks[command]
+          
+          if task && task.options && !task.options.empty?
+            # Parse options if the command has them defined
+            parsed_args, parsed_options = parse_thor_options(args, task)
+            
+            # Set options on the Thor instance
+            @thor_instance.options = Thor::CoreExt::HashWithIndifferentAccess.new(parsed_options)
+            
+            # Call with parsed arguments only (options are in the options hash)
+            if @thor_instance.respond_to?(command)
+              @thor_instance.send(command, *parsed_args)
+            else
+              @thor_instance.send(command, *parsed_args)
+            end
           else
-            # If method doesn't exist, this will raise a proper error
-            @thor_instance.send(command, *args)
+            # No options defined, use original behavior
+            if @thor_instance.respond_to?(command)
+              @thor_instance.send(command, *args)
+            else
+              @thor_instance.send(command, *args)
+            end
           end
         end
       rescue SystemExit => e
@@ -319,6 +335,36 @@ class Thor
       rescue StandardError => e
         puts "Error: #{e.message}"
         puts "Command: #{command}, Args: #{args.inspect}" if ENV["DEBUG"]
+      end
+      
+      def parse_thor_options(args, task)
+        # Convert args array to a format Thor's option parser expects
+        remaining_args = []
+        parsed_options = {}
+        
+        # Create a temporary parser using Thor's options
+        parser = Thor::Options.new(task.options)
+        
+        # Parse the arguments
+        begin
+          if args.is_a?(Array)
+            # Parse the options from the array
+            parsed_options = parser.parse(args)
+            remaining_args = parser.remaining
+          else
+            # Single string argument, split it first
+            split_args = safe_parse_input(args) || args.split(/\s+/)
+            parsed_options = parser.parse(split_args)
+            remaining_args = parser.remaining
+          end
+        rescue Thor::Error => e
+          # If parsing fails, treat everything as arguments (backward compatibility)
+          puts "Option parsing error: #{e.message}" if ENV["DEBUG"]
+          remaining_args = args.is_a?(Array) ? args : [args]
+          parsed_options = {}
+        end
+        
+        [remaining_args, parsed_options]
       end
 
       def show_help(command = nil)
