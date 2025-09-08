@@ -31,7 +31,8 @@ class Thor
         
         # Ctrl-C handling configuration
         @ctrl_c_behavior = merged_options[:ctrl_c_behavior] || :clear_prompt
-        @double_ctrl_c_timeout = merged_options[:double_ctrl_c_timeout] || 0.5
+        @double_ctrl_c_timeout = merged_options.key?(:double_ctrl_c_timeout) ? 
+                                merged_options[:double_ctrl_c_timeout] : 0.5
         @last_interrupt_time = nil
         
         setup_completion
@@ -362,8 +363,9 @@ class Thor
         current_time = Time.now
         
         # Check for double Ctrl-C
-        if @last_interrupt_time && (current_time - @last_interrupt_time) < @double_ctrl_c_timeout
+        if @last_interrupt_time && @double_ctrl_c_timeout && (current_time - @last_interrupt_time) < @double_ctrl_c_timeout
           puts "\n(Interrupted twice - exiting)"
+          @last_interrupt_time = nil  # Reset for next time
           return true  # Signal to exit
         end
         
