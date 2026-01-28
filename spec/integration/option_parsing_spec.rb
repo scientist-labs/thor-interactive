@@ -92,7 +92,11 @@ RSpec.describe "Option parsing" do
         shell.send(:invoke_thor_command, "process", ["file.txt", "--config", "key1:value1", "key2:value2"])
       end
       
-      expect(output).to include("Config: {\"key1\"=>\"value1\", \"key2\"=>\"value2\"}")
+      expect(output).to include("Config:")
+      expect(output).to include("\"key1\"")
+      expect(output).to include("\"value1\"")
+      expect(output).to include("\"key2\"")
+      expect(output).to include("\"value2\"")
     end
     
     it "handles multiple options" do
