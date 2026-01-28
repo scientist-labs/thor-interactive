@@ -174,8 +174,56 @@ RSpec.describe "Shell Integration" do
       expect(subcommand_shell.send(:thor_command?, "server")).to be true
     end
 
-    # Note: Thor subcommand execution is not fully implemented in this version
-    # This would require more complex Thor integration beyond the current scope
+    it "executes /db create" do
+      output = capture_stdout { subcommand_shell.send(:process_input, "/db create") }
+      expect(output).to include("Database created")
+    end
+
+    it "executes /db drop" do
+      output = capture_stdout { subcommand_shell.send(:process_input, "/db drop") }
+      expect(output).to include("Database dropped")
+    end
+
+    it "executes /server start" do
+      output = capture_stdout { subcommand_shell.send(:process_input, "/server start") }
+      expect(output).to include("Server started")
+    end
+
+    it "executes /server stop" do
+      output = capture_stdout { subcommand_shell.send(:process_input, "/server stop") }
+      expect(output).to include("Server stopped")
+    end
+
+    it "executes /db create --name test" do
+      output = capture_stdout { subcommand_shell.send(:process_input, "/db create --name test") }
+      expect(output).to include("Database created: test")
+    end
+
+    it "executes /server start --port 8080" do
+      output = capture_stdout { subcommand_shell.send(:process_input, "/server start --port 8080") }
+      expect(output).to include("Server started on port 8080")
+    end
+
+    it "shows subcommand help with /help db" do
+      output = capture_stdout { subcommand_shell.send(:process_input, "/help db") }
+      expect(output).to include("Commands for 'db':")
+      expect(output).to include("create")
+      expect(output).to include("drop")
+    end
+
+    it "shows subcommand help with /help server" do
+      output = capture_stdout { subcommand_shell.send(:process_input, "/help server") }
+      expect(output).to include("Commands for 'server':")
+      expect(output).to include("start")
+      expect(output).to include("stop")
+    end
+
+    it "handles unknown subcommand gracefully" do
+      output = capture_stdout { subcommand_shell.send(:process_input, "/db nonexistent") }
+      # Thor dispatches unknown subcommands to the default help command
+      # so we just ensure it doesn't crash
+      expect(output).not_to be_nil
+    end
   end
 
   describe "full session simulation" do

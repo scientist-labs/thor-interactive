@@ -152,10 +152,16 @@ class Thor
         # Parse the command and check what we're completing
         parts = preposing.split(/\s+/)
         command = parts[0].sub(/^\//, '') if parts[0]
-        
+
+        # Check if this is a subcommand
+        subcommand_class = @thor_class.subcommand_classes[command] if command
+        if subcommand_class
+          return complete_subcommand_args(subcommand_class, text, parts)
+        end
+
         # Get the Thor task if it exists
         task = @thor_class.tasks[command] if command
-        
+
         # Check if we're likely completing a path
         if path_like?(text) || after_path_option?(preposing)
           complete_path(text)
@@ -167,6 +173,40 @@ class Thor
           # This helps with commands that take file arguments
           complete_path(text)
         end
+      end
+
+      def complete_subcommand_args(subcommand_class, text, parts)
+        # parts[0] = "/db" or "db", parts[1..] = subcommand args
+        if parts.length <= 1
+          # No subcommand yet typed, complete subcommand names
+          # e.g. "/db <TAB>"
+          complete_subcommands(subcommand_class, text)
+        else
+          # A subcommand name has been typed, check for option completion
+          sub_cmd_name = parts[1]
+          sub_task = subcommand_class.tasks[sub_cmd_name]
+
+          if text.start_with?('--') || text.start_with?('-')
+            complete_option_names(sub_task, text)
+          else
+            # Could be completing a subcommand name or a positional arg
+            if parts.length == 2 && !text.empty?
+              # Still typing the subcommand name, e.g. "/db cr<TAB>"
+              # But only if 'text' is part of a subcommand name being typed
+              # (parts[1] is the preposing word, text is what's being completed)
+              complete_subcommands(subcommand_class, text)
+            else
+              complete_path(text)
+            end
+          end
+        end
+      end
+
+      def complete_subcommands(subcommand_class, text)
+        return [] if text.nil?
+
+        command_names = subcommand_class.tasks.keys
+        command_names.select { |cmd| cmd.start_with?(text) }.sort
       end
       
       def path_like?(text)
@@ -509,7 +549,15 @@ class Thor
       end
 
       def show_help(command = nil)
-        if command && @thor_class.tasks.key?(command)
+        if command && @thor_class.subcommand_classes.key?(command)
+          # Show help for a subcommand — list its available commands
+          subcommand_class = @thor_class.subcommand_classes[command]
+          puts "Commands for '#{command}':"
+          subcommand_class.tasks.each do |name, task|
+            puts "  /#{command} #{name.ljust(15)} #{task.description}"
+          end
+          puts
+        elsif command && @thor_class.tasks.key?(command)
           @thor_class.command_help(Thor::Base.shell.new, command)
         else
           puts "Available commands (prefix with /):"
