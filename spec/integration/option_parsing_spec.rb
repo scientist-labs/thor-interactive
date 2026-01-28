@@ -164,21 +164,111 @@ RSpec.describe "Option parsing" do
       output = capture_stdout do
         shell.send(:invoke_thor_command, "process", ["file.txt", "--limit", "not-a-number"])
       end
-      
-      # Should handle the error gracefully
-      expect(output).to include("file.txt")
+
+      # Should show a user-friendly error, not a stack trace
+      expect(output).to include("Option error:")
+      expect(output).to include("--limit")
+      expect(output).not_to include("wrong number of arguments")
     end
-    
+
     it "handles unknown options gracefully" do
       output = capture_stdout do
         shell.send(:invoke_thor_command, "process", ["file.txt", "--unknown-option"])
       end
-      
-      # Should still process the file, ignoring unknown option
-      expect(output).to include("Processing file.txt")
+
+      # Should warn about the unknown option, not blow up
+      expect(output).to include("Unknown option")
+      expect(output).to include("--unknown-option")
+      expect(output).not_to include("wrong number of arguments")
     end
   end
   
+  describe "edge cases" do
+    let(:edge_app) do
+      Class.new(Thor) do
+        include Thor::Interactive::Command
+
+        desc "topics [FILTER]", "List topics"
+        option :summarize, type: :boolean
+        option :format, type: :string
+        def topics(filter = nil)
+          puts "Filter: #{filter.inspect}"
+          puts "Options: #{options.to_h.inspect}"
+        end
+      end
+    end
+
+    let(:shell) { Thor::Interactive::Shell.new(edge_app) }
+    let(:task) { edge_app.tasks["topics"] }
+
+    it "warns on unknown options" do
+      output = capture_stdout do
+        shell.send(:invoke_thor_command, "topics", ["--unknown-option"])
+      end
+
+      expect(output).to include("Unknown option")
+      expect(output).to include("--unknown-option")
+      expect(output).not_to include("Filter:")
+    end
+
+    it "warns when text args contain unknown option-like strings" do
+      output = capture_stdout do
+        result = shell.send(:parse_thor_options,
+          ["The", "start", "--option", "the", "rest"],
+          task
+        )
+        expect(result).to be_nil
+      end
+
+      expect(output).to include("Unknown option")
+      expect(output).to include("--option")
+    end
+
+    it "parses valid options mixed with positional args" do
+      args, options = shell.send(:parse_thor_options,
+        ["AI", "topics", "--summarize"],
+        task
+      )
+
+      expect(args).to include("AI")
+      expect(options["summarize"]).to eq(true)
+    end
+
+    it "parses valid string option with value placed before args" do
+      args, options = shell.send(:parse_thor_options,
+        ["--format", "json", "AI"],
+        task
+      )
+
+      expect(args).to eq(["AI"])
+      expect(options["format"]).to eq("json")
+    end
+
+    it "parses valid string option with value placed after args" do
+      args, options = shell.send(:parse_thor_options,
+        ["AI", "--format", "json"],
+        task
+      )
+
+      expect(args).to eq(["AI"])
+      expect(options["format"]).to eq("json")
+    end
+
+    it "handles multiple unknown options" do
+      output = capture_stdout do
+        result = shell.send(:parse_thor_options,
+          ["file.txt", "--foo", "--bar"],
+          task
+        )
+        expect(result).to be_nil
+      end
+
+      expect(output).to include("Unknown options")
+      expect(output).to include("--foo")
+      expect(output).to include("--bar")
+    end
+  end
+
   describe "slash command format" do
     let(:shell) { Thor::Interactive::Shell.new(app_with_options) }
     
@@ -218,19 +308,21 @@ RSpec.describe "Option parsing" do
       expect(options[:verbose]).to eq(true)
     end
     
-    it "returns empty options when parsing fails" do
-      task_mock = double("task", options: { verbose: { type: :boolean } })
-      
-      # Force a parsing error
+    it "returns nil when parsing fails" do
+      # Create the shell first, then stub Thor::Options.new to force a parse error
+      test_shell = shell
+
       allow(Thor::Options).to receive(:new).and_raise(Thor::Error, "Parse error")
-      
-      args, options = shell.send(:parse_thor_options,
-        ["file.txt", "--bad-option"],
-        task_mock
-      )
-      
-      expect(args).to eq(["file.txt", "--bad-option"])
-      expect(options).to eq({})
+
+      output = capture_stdout do
+        result = test_shell.send(:parse_thor_options,
+          ["file.txt", "--bad-option"],
+          task
+        )
+        expect(result).to be_nil
+      end
+
+      expect(output).to include("Option error: Parse error")
     end
   end
   

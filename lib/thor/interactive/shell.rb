@@ -149,9 +149,141 @@ class Thor
       end
 
       def complete_command_options(text, preposing)
-        # Basic implementation - can be enhanced later
-        # For now, just return empty array to let Reline handle file completion
+        # Parse the command and check what we're completing
+        parts = preposing.split(/\s+/)
+        command = parts[0].sub(/^\//, '') if parts[0]
+        
+        # Get the Thor task if it exists
+        task = @thor_class.tasks[command] if command
+        
+        # Check if we're likely completing a path
+        if path_like?(text) || after_path_option?(preposing)
+          complete_path(text)
+        elsif text.start_with?('--') || text.start_with?('-')
+          # Complete option names
+          complete_option_names(task, text)
+        else
+          # Default to path completion for positional args that might be files
+          # This helps with commands that take file arguments
+          complete_path(text)
+        end
+      end
+      
+      def path_like?(text)
+        # Check if text looks like a path
+        text.match?(%r{^[~./]|/}) || text.match?(/\.(txt|rb|md|json|xml|yaml|yml|csv|log|html|css|js)$/i)
+      end
+      
+      def after_path_option?(preposing)
+        # Check if we're after a common file/path option
+        preposing.match?(/(?:--file|--output|--input|--path|--dir|--directory|-f|-o|-i|-d)\s*$/)
+      end
+      
+      def complete_path(text)
+        return [] if text.nil?
+        
+        # Special case for empty text - show files in current directory
+        if text.empty?
+          matches = Dir.glob("*", File::FNM_DOTMATCH).select do |path|
+            basename = File.basename(path)
+            basename != '.' && basename != '..'
+          end
+          return format_path_completions(matches, text)
+        end
+        
+        # Expand ~ to home directory for matching
+        expanded = text.start_with?('~') ? File.expand_path(text) : text
+        
+        # Determine directory and prefix for matching
+        if text.end_with?('/')
+          # User typed a directory with trailing slash - show its contents
+          dir = expanded
+          prefix = ''
+        elsif File.directory?(expanded) && !text.end_with?('/')
+          # It's a directory without trailing slash - complete the directory name
+          dir = File.dirname(expanded)
+          prefix = File.basename(expanded)
+        else
+          # Completing a partial filename
+          dir = File.dirname(expanded)
+          prefix = File.basename(expanded)
+        end
+        
+        # Get matching files/dirs
+        pattern = File.join(dir, "#{prefix}*")
+        matches = Dir.glob(pattern, File::FNM_DOTMATCH).select do |path|
+          # Filter out . and .. entries
+          basename = File.basename(path)
+          basename != '.' && basename != '..'
+        end
+        
+        format_path_completions(matches, text)
+      rescue => e
+        # If path completion fails, return empty array
         []
+      end
+      
+      def format_path_completions(matches, original_text)
+        # Format the completions based on how the user typed the path
+        matches.map do |path|
+          # Add trailing / for directories
+          display_path = File.directory?(path) && !path.end_with?('/') ? "#{path}/" : path
+          
+          # Handle paths with spaces by escaping them
+          display_path = display_path.gsub(' ', '\ ')
+          
+          # Return path as user would type it
+          if original_text.start_with?('~')
+            # Replace home directory with ~
+            home = ENV['HOME']
+            if display_path.start_with?(home)
+              "~#{display_path[home.length..-1]}"
+            else
+              display_path.sub(ENV['HOME'], '~')
+            end
+          elsif original_text.start_with?('./')
+            # Keep ./ prefix and make path relative
+            if display_path.start_with?(Dir.pwd)
+              rel_path = display_path.sub(/^#{Regexp.escape(Dir.pwd)}\//, '')
+              "./#{rel_path}"
+            else
+              # Already relative, just ensure ./ prefix
+              display_path.start_with?('./') ? display_path : "./#{File.basename(display_path)}"
+            end
+          elsif original_text.start_with?('/')
+            # Absolute path - return as is
+            display_path
+          else
+            # Relative path without ./ prefix
+            # If the matched path is in current dir, just return the basename
+            dir = File.dirname(display_path)
+            if dir == '.' || display_path.start_with?('./')
+              basename = File.basename(display_path)
+              basename += '/' if File.directory?(display_path.gsub('\ ', ' ')) && !basename.end_with?('/')
+              basename
+            else
+              display_path.sub(/^#{Regexp.escape(Dir.pwd)}\//, '')
+            end
+          end
+        end.sort
+      end
+      
+      def complete_option_names(task, text)
+        return [] unless task && task.options
+        
+        # Get all option names (long and short forms)
+        options = []
+        task.options.each do |name, option|
+          options << "--#{name}"
+          if option.aliases
+            # Aliases can be string or array
+            aliases = option.aliases.is_a?(Array) ? option.aliases : [option.aliases]
+            aliases.each { |a| options << a if a.start_with?('-') }
+          end
+        end
+        
+        # Filter by what user has typed
+        options.select { |opt| opt.start_with?(text) }.sort
       end
 
       def process_input(input)
@@ -300,8 +432,11 @@ class Thor
           
           if task && task.options && !task.options.empty?
             # Parse options if the command has them defined
-            parsed_args, parsed_options = parse_thor_options(args, task)
-            
+            result = parse_thor_options(args, task)
+            return unless result # Parse failed, error already shown
+
+            parsed_args, parsed_options = result
+
             # Set options on the Thor instance
             @thor_instance.options = Thor::CoreExt::HashWithIndifferentAccess.new(parsed_options)
             
@@ -341,12 +476,11 @@ class Thor
         # Convert args array to a format Thor's option parser expects
         remaining_args = []
         parsed_options = {}
-        
-        # Create a temporary parser using Thor's options
-        parser = Thor::Options.new(task.options)
-        
-        # Parse the arguments
+
         begin
+          # Create a temporary parser using Thor's options
+          parser = Thor::Options.new(task.options)
+
           if args.is_a?(Array)
             # Parse the options from the array
             parsed_options = parser.parse(args)
@@ -358,12 +492,19 @@ class Thor
             remaining_args = parser.remaining
           end
         rescue Thor::Error => e
-          # If parsing fails, treat everything as arguments (backward compatibility)
-          puts "Option parsing error: #{e.message}" if ENV["DEBUG"]
-          remaining_args = args.is_a?(Array) ? args : [args]
-          parsed_options = {}
+          # Show user-friendly error for option parsing failures (e.g. invalid numeric value)
+          puts "Option error: #{e.message}"
+          return nil
         end
-        
+
+        # Check for unknown options left in remaining args
+        unknown = remaining_args.select { |a| a.start_with?('--') || (a.start_with?('-') && a.length > 1 && !a.match?(/^-\d/)) }
+        unless unknown.empty?
+          puts "Unknown option#{'s' if unknown.length > 1}: #{unknown.join(', ')}"
+          puts "Run '/help #{task.name}' to see available options."
+          return nil
+        end
+
         [remaining_args, parsed_options]
       end
 
