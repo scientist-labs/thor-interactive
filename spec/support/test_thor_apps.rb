@@ -81,11 +81,12 @@ class StatefulTestApp < Thor
 end
 
 class SubcommandTestApp < Thor
-  desc "db SUBCOMMAND", "Database commands"
-  subcommand "db", Class.new(Thor) do
+  DbCommands = Class.new(Thor) do
     desc "create", "Create database"
+    option :name, type: :string, desc: "Database name"
     def create
-      puts "Database created"
+      db_name = options[:name] || "default"
+      puts "Database created: #{db_name}"
     end
 
     desc "drop", "Drop database"
@@ -94,11 +95,12 @@ class SubcommandTestApp < Thor
     end
   end
 
-  desc "server SUBCOMMAND", "Server commands"  
-  subcommand "server", Class.new(Thor) do
+  ServerCommands = Class.new(Thor) do
     desc "start", "Start server"
+    option :port, type: :numeric, default: 3000, desc: "Port number"
     def start
-      puts "Server started"
+      port = options[:port] || 3000
+      puts "Server started on port #{port}"
     end
 
     desc "stop", "Stop server"
@@ -106,6 +108,12 @@ class SubcommandTestApp < Thor
       puts "Server stopped"
     end
   end
+
+  desc "db SUBCOMMAND", "Database commands"
+  subcommand "db", DbCommands
+
+  desc "server SUBCOMMAND", "Server commands"
+  subcommand "server", ServerCommands
 end
 
 class OptionsTestApp < Thor

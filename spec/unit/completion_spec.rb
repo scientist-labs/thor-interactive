@@ -120,6 +120,36 @@ RSpec.describe "Completion System" do
       expect(subcommand_shell.send(:thor_command?, "db")).to be true
       expect(subcommand_shell.send(:thor_command?, "server")).to be true
     end
+
+    it "completes subcommand names after /db" do
+      completions = subcommand_shell.send(:complete_input, "", "/db ")
+      expect(completions).to include("create", "drop")
+    end
+
+    it "completes partial subcommand names" do
+      completions = subcommand_shell.send(:complete_input, "cr", "/db ")
+      expect(completions).to eq(["create"])
+    end
+
+    it "completes options for a subcommand" do
+      completions = subcommand_shell.send(:complete_input, "--", "/db create ")
+      expect(completions).to include("--name")
+    end
+
+    it "completes server subcommand names" do
+      completions = subcommand_shell.send(:complete_input, "st", "/server ")
+      expect(completions).to include("start", "stop")
+    end
+
+    it "completes server subcommand options" do
+      completions = subcommand_shell.send(:complete_input, "--", "/server start ")
+      expect(completions).to include("--port")
+    end
+
+    it "returns empty for no matching subcommand name" do
+      completions = subcommand_shell.send(:complete_input, "xyz", "/db ")
+      expect(completions).to be_empty
+    end
   end
 
   describe "completion edge cases" do
