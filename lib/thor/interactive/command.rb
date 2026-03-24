@@ -25,7 +25,18 @@ class Thor
             opts[:prompt] = options[:prompt] || options["prompt"] if options[:prompt] || options["prompt"]
             opts[:history_file] = options[:history_file] || options["history_file"] if options[:history_file] || options["history_file"]
             
-            Thor::Interactive::Shell.new(self.class, opts).start
+            if opts[:ui_mode] == :tui
+              require_relative "tui"
+              if Thor::Interactive::TUI.available?
+                require_relative "tui/ratatui_shell"
+                Thor::Interactive::TUI::RatatuiShell.new(self.class, opts).start
+              else
+                warn "ratatui_ruby gem not found, falling back to standard shell"
+                Thor::Interactive::Shell.new(self.class, opts).start
+              end
+            else
+              Thor::Interactive::Shell.new(self.class, opts).start
+            end
           end
         end
       end
