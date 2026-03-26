@@ -13,6 +13,7 @@ Thor::Interactive automatically converts your existing Thor command-line applica
 - **Command History**: Persistent readline history with up/down arrow navigation
 - **Both Modes**: Supports both traditional CLI usage and interactive REPL mode
 - **Graceful Exit**: Proper handling of Ctrl+C interrupts and Ctrl+D/exit commands
+- **TUI Mode** (optional): Rich terminal UI powered by [ratatui_ruby](https://www.ratatui-ruby.dev/) with multi-line input, status bar, spinner, and theming
 
 ## Installation
 
@@ -257,6 +258,94 @@ configure_interactive(
 ```
 
 **Why:** Thor's `invoke` method has internal deduplication that prevents repeated calls to the same method on the same instance. This causes silent failures in interactive mode where users expect to be able to repeat commands.
+
+## TUI Mode
+
+For a richer terminal experience, thor-interactive supports an optional TUI mode powered by [ratatui_ruby](https://www.ratatui-ruby.dev/) — Ruby bindings for the Rust [Ratatui](https://ratatui.rs/) library.
+
+### Setup
+
+Add `ratatui_ruby` to your application's Gemfile:
+
+```ruby
+gem 'thor-interactive'
+gem 'ratatui_ruby', '~> 1.4'  # Optional: enables TUI mode
+```
+
+Then configure your Thor app to use TUI mode:
+
+```ruby
+class MyApp < Thor
+  include Thor::Interactive::Command
+
+  configure_interactive(
+    ui_mode: :tui,
+    prompt: "myapp> "
+  )
+end
+```
+
+If `ratatui_ruby` is not installed, the app automatically falls back to the standard Reline-based REPL with a warning.
+
+### TUI Features
+
+- **Multi-line input**: Shift+Enter for newlines (on terminals supporting the [Kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/)), or Ctrl+N to toggle multi-line mode on older terminals
+- **Status bar**: Configurable left/center/right sections
+- **Spinner**: Animated activity indicator with fun rotating messages during command execution
+- **Tab completion**: Popup overlay for command and path completion
+- **Scrollback**: Command output goes above the input viewport into normal terminal scrollback
+- **Theming**: Predefined themes (`:default`, `:dark`, `:light`, `:minimal`) or custom colors
+
+### Key Bindings
+
+| Key | Action |
+|-----|--------|
+| Enter | Submit input |
+| Shift+Enter | Insert newline (Kitty protocol terminals) |
+| Ctrl+N | Toggle multi-line mode (fallback for older terminals) |
+| Ctrl+J | Always submit (even in multi-line mode) |
+| Tab | Auto-complete commands |
+| Ctrl+C | Clear input / double-tap to exit |
+| Ctrl+D | Exit |
+| Escape | Clear input / exit multi-line mode |
+| Up/Down | History navigation (single-line) or cursor movement (multi-line) |
+
+### TUI Configuration
+
+```ruby
+class MyApp < Thor
+  include Thor::Interactive::Command
+
+  configure_interactive(
+    ui_mode: :tui,
+    prompt: "myapp> ",
+    theme: :dark,                          # :default, :dark, :light, :minimal, or custom hash
+    status_bar: {
+      left: ->(instance) { " MyApp" },     # Left section (app name, etc.)
+      right: ->(instance) { " v1.0 " }     # Right section (status info, etc.)
+    },
+    spinner_messages: [                     # Custom spinner messages (optional)
+      "Thinking", "Brewing", "Crunching"
+    ]
+  )
+end
+```
+
+### Custom Theme
+
+```ruby
+configure_interactive(
+  ui_mode: :tui,
+  theme: {
+    error_fg: :light_red,
+    input_border: :cyan,
+    status_bar_fg: :white,
+    status_bar_bg: :dark_gray
+  }
+)
+```
+
+See `Thor::Interactive::TUI::Theme::THEMES` for the full list of configurable color keys.
 
 ## Advanced Usage
 
