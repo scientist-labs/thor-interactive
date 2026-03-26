@@ -460,5 +460,120 @@ if Thor::Interactive::TUI.available?
         expect(completions).to include("greet")
       end
     end
+
+    describe "multi-line without Kitty protocol (fallback workflow)" do
+      let(:tui) { double("tui") }
+
+      before do
+        set_state(shell, kitty_protocol_active: false, running: true)
+        allow(shell).to receive(:emit_above)
+        allow(shell).to receive(:execute_with_capture)
+      end
+
+      it "Enter submits by default (single-line mode)" do
+        text_input = shell.send(:instance_variable_get, :@text_input)
+        text_input.insert_char("/hello")
+        shell.send(:handle_normal_key, tui, "enter")
+        expect(text_input.content).to eq("")
+      end
+
+      it "Ctrl+N enables multi-line mode" do
+        shell.send(:handle_ctrl_key, tui, "n")
+        expect(shell.send(:instance_variable_get, :@multiline_mode)).to be true
+        expect(shell.send(:input_title)).to include("[MULTI]")
+      end
+
+      it "Enter inserts newline in multi-line mode" do
+        text_input = shell.send(:instance_variable_get, :@text_input)
+        shell.send(:handle_ctrl_key, tui, "n") # enable multiline
+        text_input.insert_char("line1")
+        shell.send(:handle_normal_key, tui, "enter")
+        expect(text_input.line_count).to eq(2)
+        expect(text_input.content).to eq("line1\n")
+      end
+
+      it "Ctrl+J submits in multi-line mode" do
+        text_input = shell.send(:instance_variable_get, :@text_input)
+        shell.send(:handle_ctrl_key, tui, "n") # enable multiline
+        text_input.insert_char("line1")
+        text_input.newline
+        text_input.insert_char("line2")
+        shell.send(:handle_ctrl_key, tui, "j")
+        # submit clears input and resets multiline mode
+        expect(text_input.content).to eq("")
+        expect(shell.send(:instance_variable_get, :@multiline_mode)).to be false
+      end
+
+      it "Escape exits multi-line mode and clears input" do
+        text_input = shell.send(:instance_variable_get, :@text_input)
+        shell.send(:handle_ctrl_key, tui, "n")
+        text_input.insert_char("draft")
+        shell.send(:handle_normal_key, tui, "escape")
+        expect(shell.send(:instance_variable_get, :@multiline_mode)).to be false
+        expect(text_input.content).to eq("")
+      end
+
+      it "Ctrl+U clears and exits multi-line mode" do
+        text_input = shell.send(:instance_variable_get, :@text_input)
+        shell.send(:handle_ctrl_key, tui, "n")
+        text_input.insert_char("text")
+        shell.send(:handle_ctrl_key, tui, "u")
+        expect(shell.send(:instance_variable_get, :@multiline_mode)).to be false
+        expect(text_input.content).to eq("")
+      end
+
+      it "Ctrl+C clears and exits multi-line mode" do
+        text_input = shell.send(:instance_variable_get, :@text_input)
+        shell.send(:handle_ctrl_key, tui, "n")
+        text_input.insert_char("text")
+        shell.send(:handle_interrupt, tui)
+        expect(shell.send(:instance_variable_get, :@multiline_mode)).to be false
+        expect(text_input.content).to eq("")
+      end
+
+      it "pasting multi-line text auto-enters multi-line mode" do
+        paste_event = double("PasteEvent", content: "line1\nline2\nline3")
+        shell.send(:handle_paste_event, paste_event)
+        expect(shell.send(:instance_variable_get, :@multiline_mode)).to be true
+        text_input = shell.send(:instance_variable_get, :@text_input)
+        expect(text_input.line_count).to eq(3)
+      end
+
+      it "pasting single-line text does not enter multi-line mode" do
+        paste_event = double("PasteEvent", content: "just one line")
+        shell.send(:handle_paste_event, paste_event)
+        expect(shell.send(:instance_variable_get, :@multiline_mode)).to be false
+      end
+
+      it "backspace auto-exits multi-line mode when input becomes empty" do
+        shell.send(:handle_ctrl_key, tui, "n")
+        text_input = shell.send(:instance_variable_get, :@text_input)
+        text_input.insert_char("x")
+        shell.send(:handle_normal_key, tui, "backspace")
+        expect(shell.send(:instance_variable_get, :@multiline_mode)).to be false
+      end
+
+      it "full workflow: toggle, type, submit, mode resets" do
+        text_input = shell.send(:instance_variable_get, :@text_input)
+
+        # Enable multi-line
+        shell.send(:handle_ctrl_key, tui, "n")
+        expect(shell.send(:input_title)).to include("[MULTI]")
+
+        # Type multi-line content
+        text_input.insert_char("SELECT *")
+        shell.send(:handle_normal_key, tui, "enter")
+        text_input.insert_char("FROM users")
+        shell.send(:handle_normal_key, tui, "enter")
+        text_input.insert_char("WHERE id = 1")
+        expect(text_input.line_count).to eq(3)
+
+        # Submit with Ctrl+J
+        shell.send(:handle_ctrl_key, tui, "j")
+        expect(text_input.content).to eq("")
+        expect(shell.send(:instance_variable_get, :@multiline_mode)).to be false
+        expect(shell.send(:input_title)).not_to include("[MULTI]")
+      end
+    end
   end
 end
