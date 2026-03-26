@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.2.0)"
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Run specs
+        run: bundle exec rake spec
+
+      - name: Update version
+        run: |
+          VERSION="${{ inputs.version }}"
+          sed -i "s/VERSION = \".*\"/VERSION = \"$VERSION\"/" lib/thor/interactive/version_constant.rb
+          echo "Updated version to $VERSION"
+          cat lib/thor/interactive/version_constant.rb
+
+      - name: Commit and tag
+        run: |
+          VERSION="${{ inputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add lib/thor/interactive/version_constant.rb
+          git commit -m "Release v$VERSION"
+          git tag "$VERSION"
+          git push origin HEAD:${{ github.ref_name }} --tags
+
+      - name: Build gem
+        run: gem build thor-interactive.gemspec
+
+      - name: Push to RubyGems
+        run: |
+          mkdir -p ~/.gem
+          echo "---" > ~/.gem/credentials
+          echo ":rubygems_api_key: ${{ secrets.RUBYGEMS_API_KEY }}" >> ~/.gem/credentials
+          chmod 0600 ~/.gem/credentials
+          gem push thor-interactive-*.gem
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ inputs.version }}"
+          gh release create "$VERSION" \
+            --title "v$VERSION" \
+            --generate-notes \
+            thor-interactive-*.gem
