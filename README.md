@@ -175,11 +175,11 @@ end
 Now unrecognized input gets sent to the search command:
 
 ```bash
-myapp> hello world
-Hello world!
+myapp> /search thor interactive
+Searching for: thor interactive
 
 myapp> some random text
-Searching for: some random text
+Searching for: some random text    # No slash needed — default handler kicks in
 ```
 
 ### Nested Session Management
