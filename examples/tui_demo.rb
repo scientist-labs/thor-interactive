@@ -34,7 +34,9 @@ class TuiDemo < Thor
     status_bar: {
       left: ->(instance) { " TUI Demo" },
       right: ->(instance) { " commands: #{instance.class.tasks.count} " }
-    }
+    },
+    # Custom spinner messages (optional - defaults are fun too)
+    spinner_messages: ["Thinking", "Brewing", "Crunching", "Vibing", "Noodling"]
   )
 
   desc "hello", "Say hello"

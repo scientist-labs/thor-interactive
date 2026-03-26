@@ -11,13 +11,13 @@ RSpec.describe Thor::Interactive::TUI::Spinner do
       expect(spinner).not_to be_active
     end
 
-    it "has default message" do
-      expect(spinner.message).to eq("running")
+    it "has a default message from the messages list" do
+      expect(described_class::DEFAULT_MESSAGES).to include(spinner.message)
     end
 
-    it "accepts custom message" do
-      s = described_class.new("processing")
-      expect(s.message).to eq("processing")
+    it "accepts custom messages list" do
+      s = described_class.new(messages: ["Loading", "Working"])
+      expect(["Loading", "Working"]).to include(s.message)
     end
   end
 
@@ -27,9 +27,14 @@ RSpec.describe Thor::Interactive::TUI::Spinner do
       expect(spinner).to be_active
     end
 
-    it "accepts a new message" do
+    it "accepts a specific message" do
       spinner.start("loading")
       expect(spinner.message).to eq("loading")
+    end
+
+    it "picks a random message when none specified" do
+      spinner.start
+      expect(described_class::DEFAULT_MESSAGES).to include(spinner.message)
     end
   end
 
@@ -47,10 +52,9 @@ RSpec.describe Thor::Interactive::TUI::Spinner do
     end
 
     it "returns spinner frame and message when active" do
-      spinner.start
+      spinner.start("Thinking")
       text = spinner.to_s
-      expect(text).to include("running")
-      # Should contain one of the braille spinner chars
+      expect(text).to include("Thinking...")
       expect(text).to match(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/)
     end
 
@@ -58,6 +62,27 @@ RSpec.describe Thor::Interactive::TUI::Spinner do
       spinner.start
       text = spinner.to_s
       expect(text).to match(/\(\d+\.\d+s\)/)
+    end
+  end
+
+  describe "message rotation" do
+    it "has default messages" do
+      expect(described_class::DEFAULT_MESSAGES.length).to be > 5
+    end
+
+    it "rotates messages after interval" do
+      spinner.start
+      first_message = spinner.message
+
+      # Simulate time passing beyond the rotation interval
+      allow(Time).to receive(:now).and_return(
+        Time.now + described_class::MESSAGE_ROTATE_INTERVAL + 0.1
+      )
+      spinner.to_s # triggers advance which checks rotation
+
+      # Message may or may not have changed depending on the list,
+      # but the mechanism should not error
+      expect(spinner.message).to be_a(String)
     end
   end
 

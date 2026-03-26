@@ -16,8 +16,9 @@ class Thor
       class RatatuiShell
         DEFAULT_PROMPT = "> "
         DEFAULT_HISTORY_FILE = "~/.thor_interactive_history"
-        MIN_VIEWPORT_HEIGHT = 12
-        VIEWPORT_MARGIN = 2 # lines reserved above viewport
+
+        # The viewport only contains: status bar (1) + input box (4)
+        INPUT_VIEWPORT_HEIGHT = 5
 
         attr_reader :thor_class, :thor_instance, :prompt
 
@@ -38,15 +39,14 @@ class Thor
           @prompt = merged_options[:prompt] || DEFAULT_PROMPT
           @history_file = File.expand_path(merged_options[:history_file] || DEFAULT_HISTORY_FILE)
 
-          @output_buffer = OutputBuffer.new
           @text_input = TextInput.new
           @status_bar = StatusBar.new(thor_class, @thor_instance, merged_options)
-          @spinner = Spinner.new
+          @spinner = Spinner.new(messages: merged_options[:spinner_messages])
           @theme = Theme.new(merged_options[:theme] || :default)
           @running = false
           @executing_command = false
-          @completions = []       # Active completion list
-          @completion_index = -1  # Selected completion (-1 = none)
+          @completions = []
+          @completion_index = -1
 
           # Ctrl-C handling
           @last_interrupt_time = nil
@@ -63,15 +63,16 @@ class Thor
           ENV["THOR_INTERACTIVE_SESSION"] = "true"
           ENV["THOR_INTERACTIVE_LEVEL"] = (nesting_level + 1).to_s
 
-          @output_buffer.append("#{@thor_class.name} Interactive Shell (TUI mode)")
-          @output_buffer.append("Enter to submit, Shift+Enter for newline, Ctrl+D to exit")
-          @output_buffer.append("")
+          # Welcome message goes to normal stdout (above viewport = scrollable)
+          puts "#{@thor_class.name} Interactive Shell (TUI mode)"
+          puts "Enter to submit, Shift+Enter for newline, Ctrl+D to exit"
+          puts
 
           @running = true
 
-          viewport_height = compute_viewport_height
-          RatatuiRuby.run(viewport: :inline, height: viewport_height, bracketed_paste: true) do |tui|
+          RatatuiRuby.run(viewport: :inline, height: INPUT_VIEWPORT_HEIGHT, bracketed_paste: true) do |tui|
             @tui = tui
+            disable_mouse_capture
             run_event_loop(tui)
           end
 
@@ -90,20 +91,6 @@ class Thor
 
         private
 
-        def compute_viewport_height
-          rows = nil
-          if $stdout.respond_to?(:winsize)
-            rows, _cols = $stdout.winsize rescue nil
-          end
-          rows ||= ENV["LINES"]&.to_i
-          rows ||= `tput lines 2>/dev/null`.to_i rescue 0
-          rows = 24 if rows < 1
-
-          # Use most of the terminal, leave a small margin at top
-          height = rows - VIEWPORT_MARGIN
-          [height, MIN_VIEWPORT_HEIGHT].max
-        end
-
         def run_event_loop(tui)
           while @running
             render(tui)
@@ -115,52 +102,21 @@ class Thor
         def render(tui)
           tui.draw do |frame|
             area = frame.area
-            # Layout: output (fill) | status bar (1) | input (3)
+            # Layout: status bar (1) | input area (fill remaining)
             areas = RatatuiRuby::Layout::Layout.split(
               area,
               constraints: [
-                RatatuiRuby::Layout::Constraint.fill(1),
                 RatatuiRuby::Layout::Constraint.length(1),
-                RatatuiRuby::Layout::Constraint.length(3)
+                RatatuiRuby::Layout::Constraint.fill(1)
               ],
               direction: :vertical
             )
-            output_area, status_area, input_area = areas
+            status_area, input_area = areas
 
-            render_output(frame, output_area)
             render_status_bar(frame, status_area)
             render_input(frame, input_area)
-            render_completions(frame, output_area) unless @completions.empty?
+            render_completions(frame, input_area) unless @completions.empty?
           end
-        end
-
-        def render_output(frame, area)
-          visible = @output_buffer.visible_lines(area.to_ary[3])
-
-          text_lines = visible.map do |entry|
-            style = case entry[:style]
-            when :error then @theme.error_style
-            when :command then @theme.command_echo_style
-            when :system then @theme.system_style
-            else @theme.output_style
-            end
-
-            spans = [RatatuiRuby::Text::Span.new(content: entry[:text], style: style)]
-            RatatuiRuby::Text::Line.new(spans: spans)
-          end
-
-          block = RatatuiRuby::Widgets::Block.new(
-            borders: [:all],
-            border_style: @theme.output_border_style
-          )
-
-          paragraph = RatatuiRuby::Widgets::Paragraph.new(
-            text: text_lines,
-            block: block,
-            wrap: true
-          )
-
-          frame.render_widget(paragraph, area)
         end
 
         def render_status_bar(frame, area)
@@ -178,14 +134,12 @@ class Thor
         end
 
         def render_input(frame, area)
-          # Build input text with cursor indicator
           input_lines = @text_input.lines
           cursor_row = @text_input.cursor_row
           cursor_col = @text_input.cursor_col
 
           text_lines = input_lines.each_with_index.map do |line, row|
             if row == cursor_row && @running && !@executing_command
-              # Show cursor as inverted character
               before = line[0...cursor_col] || ""
               cursor_char = line[cursor_col] || " "
               after = line[(cursor_col + 1)..] || ""
@@ -222,17 +176,15 @@ class Thor
           frame.render_widget(paragraph, area)
         end
 
-        def render_completions(frame, output_area)
-          # Render completion overlay at bottom of output area
+        def render_completions(frame, input_area)
           max_visible = [(@completions.length), 8].min
-          height = max_visible + 2 # +2 for borders
+          height = max_visible + 2
 
-          # Position at the bottom of the output area
-          oa = output_area.to_ary # [x, y, width, height]
-          comp_y = oa[1] + oa[3] - height
-          comp_y = oa[1] if comp_y < oa[1]
+          ia = input_area.to_ary
+          comp_y = ia[1] - height
+          comp_y = 0 if comp_y < 0
 
-          comp_area = RatatuiRuby::Layout::Rect.new(oa[0] + 1, comp_y, [oa[2] - 2, 30].min, height)
+          comp_area = RatatuiRuby::Layout::Rect.new(ia[0] + 1, comp_y, [ia[2] - 2, 30].min, height)
 
           lines = @completions.first(max_visible).each_with_index.map do |comp, i|
             style = i == @completion_index ? @theme.completion_selected_style : @theme.completion_style
@@ -276,7 +228,6 @@ class Thor
           has_alt = modifiers.include?("alt")
           has_shift = modifiers.include?("shift")
 
-          # If completions are showing, handle navigation first
           if !@completions.empty?
             handled = handle_completion_key(tui, code, has_ctrl, has_alt)
             return if handled
@@ -293,7 +244,6 @@ class Thor
             when "c"
               handle_interrupt(tui)
             when "j", "enter"
-              # Ctrl+J / Ctrl+Enter: always submit
               submit_input(tui)
             when "a"
               @text_input.move_home
@@ -303,15 +253,12 @@ class Thor
               @text_input.clear
             end
           elsif has_shift && code == "enter"
-            # Shift+Enter: always newline
             @text_input.newline
           elsif has_alt && code == "enter"
-            # Alt+Enter: always newline
             @text_input.newline
           else
             case code
             when "enter"
-              # Enter: always submit
               submit_input(tui)
             when "backspace"
               @text_input.backspace
@@ -343,10 +290,6 @@ class Thor
               @text_input.move_end
             when "tab"
               handle_tab_completion
-            when "pageup"
-              @output_buffer.scroll_up(5)
-            when "pagedown"
-              @output_buffer.scroll_down(5)
             when "escape"
               if !@completions.empty?
                 dismiss_completions
@@ -365,11 +308,9 @@ class Thor
         def handle_completion_key(tui, code, has_ctrl, has_alt)
           case code
           when "tab"
-            # Cycle through completions
             @completion_index = (@completion_index + 1) % @completions.length
             true
           when "enter"
-            # Accept selected completion
             if @completion_index >= 0 && @completion_index < @completions.length
               accept_completion(@completions[@completion_index])
             end
@@ -384,7 +325,6 @@ class Thor
         end
 
         def accept_completion(completion)
-          # Remove the partial word and insert the completion
           line = @text_input.current_line
           col = @text_input.cursor_col
           before_cursor = line[0...col] || +""
@@ -417,27 +357,28 @@ class Thor
 
           @last_interrupt_time = current_time
           @text_input.clear
-          @output_buffer.append("^C (press Ctrl+C again to exit, Ctrl+D to exit)", style: :system)
+          # Push interrupt message above viewport
+          emit_above(tui, "^C (press Ctrl+C again to exit, Ctrl+D to exit)", style: :system)
         end
 
         def submit_input(tui)
           input = @text_input.submit
           return if input.strip.empty?
 
-          input_echo = "#{@prompt}#{input}"
-          @output_buffer.append(input_echo, style: :command)
+          # Echo the command above the viewport (into scrollback)
+          emit_above(tui, "#{@prompt}#{input}", style: :command)
 
           if should_exit?(input)
             @running = false
             return
           end
 
-          execute_with_capture(tui, input_echo) do
+          execute_with_capture(tui) do
             process_input(input.strip)
           end
         end
 
-        def execute_with_capture(tui, input_echo = "", &block)
+        def execute_with_capture(tui, &block)
           @executing_command = true
           @spinner.start
 
@@ -463,80 +404,68 @@ class Thor
             end
           end
 
-          # Animate while waiting for command to finish
+          # Animate spinner while waiting for command to finish
           while command_thread.alive?
             render(tui)
             event = tui.poll_event(timeout: 0.05)
 
-            # Allow Ctrl+C to interrupt during execution
             if event.is_a?(RatatuiRuby::Event::Key)
               code = event.code
               modifiers = event.modifiers || []
               if modifiers.include?("ctrl") && code == "c"
                 command_thread.kill
-                @output_buffer.append("^C Command interrupted", style: :error)
+                emit_above(tui, "^C Command interrupted", style: :error)
                 break
               end
             end
           end
 
-          command_thread.join(1) # Wait briefly for cleanup
+          command_thread.join(1)
 
           @spinner.stop
           @executing_command = false
 
-          # Collect all output lines
+          # Push all output above viewport into terminal scrollback
           stdout_text = captured_stdout.string
           stderr_text = captured_stderr.string
 
-          output_lines = []
-          unless stdout_text.empty?
-            strip_ansi(stdout_text).split("\n", -1).each do |line|
-              output_lines << {text: line, style: nil}
-            end
-          end
-          unless stderr_text.empty?
-            strip_ansi(stderr_text).split("\n", -1).each do |line|
-              output_lines << {text: line, style: :error}
-            end
+          unless stdout_text.strip.empty?
+            emit_above(tui, strip_ansi(stdout_text).chomp)
           end
 
-          # Show in the TUI output buffer
-          output_lines.each { |l| @output_buffer.append(l[:text], style: l[:style]) }
-          @output_buffer.append("")
-
-          # Also push to terminal scrollback via insert_before
-          # so the user can scroll up in the terminal after exiting
-          push_to_scrollback(tui, input_echo, output_lines) unless output_lines.empty?
+          unless stderr_text.strip.empty?
+            emit_above(tui, strip_ansi(stderr_text).chomp, style: :error)
+          end
         end
 
-        def push_to_scrollback(tui, command_echo, output_lines)
-          # Build text lines for the scrollback block
-          all_lines = []
-          all_lines << RatatuiRuby::Text::Line.new(
-            spans: [RatatuiRuby::Text::Span.new(
-              content: command_echo,
-              style: @theme.command_echo_style
-            )]
-          )
-          output_lines.each do |entry|
-            style = entry[:style] == :error ? @theme.error_style : @theme.output_style
-            all_lines << RatatuiRuby::Text::Line.new(
-              spans: [RatatuiRuby::Text::Span.new(content: entry[:text], style: style)]
-            )
+        # Push text above the inline viewport into terminal scrollback.
+        # This is the key to the Claude Code-like UX: output lives in
+        # normal terminal scrollback, not inside the TUI.
+        def emit_above(tui, text, style: nil)
+          lines = text.split("\n", -1).map do |line_text|
+            ratatui_style = case style
+            when :error then @theme.error_style
+            when :command then @theme.command_echo_style
+            when :system then @theme.system_style
+            else nil
+            end
+
+            if ratatui_style
+              RatatuiRuby::Text::Line.new(
+                spans: [RatatuiRuby::Text::Span.new(content: line_text, style: ratatui_style)]
+              )
+            else
+              RatatuiRuby::Text::Line.new(
+                spans: [RatatuiRuby::Text::Span.new(content: line_text)]
+              )
+            end
           end
 
-          # Insert above the viewport
-          height = all_lines.length
-          tui.insert_before(height) do |frame|
-            paragraph = RatatuiRuby::Widgets::Paragraph.new(
-              text: all_lines,
-              wrap: true
-            )
-            frame.render_widget(paragraph, frame.area)
-          end
+          paragraph = RatatuiRuby::Widgets::Paragraph.new(text: lines, wrap: true)
+          tui.insert_before(lines.length, paragraph)
+          render(tui)
         rescue => e
-          # insert_before may not be supported in all contexts
+          # Silently ignore if insert_before fails
         end
 
         def handle_tab_completion
@@ -557,10 +486,28 @@ class Thor
           if completions.length == 1
             accept_completion(completions.first)
           else
-            # Show completions for cycling
             @completions = completions
             @completion_index = 0
           end
+        end
+
+        # Disable mouse capture so the terminal handles scrollback and
+        # text selection natively. ratatui enables mouse capture by default
+        # which intercepts mouse wheel (breaks scrollback) and click/drag
+        # (breaks text selection). We don't use mouse events.
+        def disable_mouse_capture
+          tty = IO.console
+          return unless tty
+
+          # Disable all mouse tracking modes:
+          #   ?1000 - normal tracking
+          #   ?1002 - button-event tracking
+          #   ?1003 - any-event tracking
+          #   ?1006 - SGR extended mode
+          tty.write("\e[?1000l\e[?1002l\e[?1003l\e[?1006l")
+          tty.flush
+        rescue
+          # Not critical if this fails
         end
 
         def strip_ansi(text)
