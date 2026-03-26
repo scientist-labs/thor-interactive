@@ -52,15 +52,17 @@ end
 MyApp.start(ARGV)
 ```
 
-Run it:
+Then `bundle install` and run:
 
 ```bash
 # Normal CLI usage (unchanged)
-ruby myapp.rb hello World
+bundle exec ruby myapp.rb hello World
 
 # Interactive TUI mode
-ruby myapp.rb interactive
+bundle exec ruby myapp.rb interactive
 ```
+
+> **Note:** `bundle exec` ensures `ratatui_ruby` is loaded. Without it, you'll get the basic Reline REPL instead of the TUI.
 
 ### Key Bindings
 
