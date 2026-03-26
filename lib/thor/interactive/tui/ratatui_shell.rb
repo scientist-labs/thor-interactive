@@ -17,8 +17,8 @@ class Thor
         DEFAULT_PROMPT = "> "
         DEFAULT_HISTORY_FILE = "~/.thor_interactive_history"
 
-        # The viewport only contains: status bar (1) + input box (4)
-        INPUT_VIEWPORT_HEIGHT = 5
+        # Viewport: status bar (1) + input box with room for multi-line (7)
+        INPUT_VIEWPORT_HEIGHT = 8
 
         attr_reader :thor_class, :thor_instance, :prompt
 
@@ -48,6 +48,10 @@ class Thor
           @completions = []
           @completion_index = -1
 
+          # Multi-line input mode
+          @kitty_protocol_active = false
+          @multiline_mode = false # fallback toggle when Kitty protocol unavailable
+
           # Ctrl-C handling
           @last_interrupt_time = nil
           @double_ctrl_c_timeout = merged_options.key?(:double_ctrl_c_timeout) ?
@@ -63,22 +67,28 @@ class Thor
           ENV["THOR_INTERACTIVE_SESSION"] = "true"
           ENV["THOR_INTERACTIVE_LEVEL"] = (nesting_level + 1).to_s
 
-          # Welcome message goes to normal stdout (above viewport = scrollable)
-          puts "#{@thor_class.name} Interactive Shell (TUI mode)"
-          puts "Enter to submit, Shift+Enter for newline, Ctrl+D to exit"
-          puts
-
           @running = true
 
           RatatuiRuby.run(viewport: :inline, height: INPUT_VIEWPORT_HEIGHT, bracketed_paste: true) do |tui|
             @tui = tui
             disable_mouse_capture
+            enable_kitty_keyboard
+
+            # Welcome message above viewport (scrollback)
+            emit_above(tui, "#{@thor_class.name} Interactive Shell (TUI mode)", style: :system)
+            if @kitty_protocol_active
+              emit_above(tui, "Enter to submit, Shift+Enter for newline, Ctrl+D to exit", style: :system)
+            else
+              emit_above(tui, "Enter to submit, Ctrl+N for multi-line mode, Ctrl+D to exit", style: :system)
+            end
+
             run_event_loop(tui)
           end
 
           save_history
           puts "Goodbye!"
         ensure
+          disable_kitty_keyboard
           @running = false
           if was_in_session
             ENV["THOR_INTERACTIVE_SESSION"] = "true"
@@ -102,7 +112,6 @@ class Thor
         def render(tui)
           tui.draw do |frame|
             area = frame.area
-            # Layout: status bar (1) | input area (fill remaining)
             areas = RatatuiRuby::Layout::Layout.split(
               area,
               constraints: [
@@ -138,30 +147,16 @@ class Thor
           cursor_row = @text_input.cursor_row
           cursor_col = @text_input.cursor_col
 
-          text_lines = input_lines.each_with_index.map do |line, row|
-            if row == cursor_row && @running && !@executing_command
-              before = line[0...cursor_col] || ""
-              cursor_char = line[cursor_col] || " "
-              after = line[(cursor_col + 1)..] || ""
-
-              spans = []
-              spans << RatatuiRuby::Text::Span.new(content: before) unless before.empty?
-              spans << RatatuiRuby::Text::Span.new(
-                content: cursor_char,
-                style: @theme.cursor_style
-              )
-              spans << RatatuiRuby::Text::Span.new(content: after) unless after.empty?
-
-              RatatuiRuby::Text::Line.new(spans: spans)
-            else
-              RatatuiRuby::Text::Line.new(
-                spans: [RatatuiRuby::Text::Span.new(content: line)]
-              )
-            end
+          text_lines = input_lines.map do |line|
+            RatatuiRuby::Text::Line.new(
+              spans: [RatatuiRuby::Text::Span.new(content: line)]
+            )
           end
 
+          title = input_title
+
           block = RatatuiRuby::Widgets::Block.new(
-            title: @prompt.strip,
+            title: title,
             title_style: @theme.input_title_style,
             borders: [:all],
             border_style: @theme.input_border_style
@@ -174,6 +169,24 @@ class Thor
           )
 
           frame.render_widget(paragraph, area)
+
+          # Place the real terminal cursor inside the input area.
+          # +1 offsets account for the block border.
+          if @running && !@executing_command
+            ax, ay = area.to_ary[0], area.to_ary[1]
+            frame.set_cursor_position(ax + 1 + cursor_col, ay + 1 + cursor_row)
+          end
+        end
+
+        def input_title
+          base = @prompt.strip
+          if @multiline_mode && !@kitty_protocol_active
+            "#{base} [MULTI] (Ctrl+J to submit)"
+          elsif @kitty_protocol_active && @text_input.line_count > 1
+            "#{base} (Enter to submit)"
+          else
+            base
+          end
         end
 
         def render_completions(frame, input_area)
@@ -234,73 +247,99 @@ class Thor
           end
 
           if has_ctrl
-            case code
-            when "d"
-              if @text_input.empty?
-                @running = false
-              else
-                @text_input.delete_char
-              end
-            when "c"
-              handle_interrupt(tui)
-            when "j", "enter"
-              submit_input(tui)
-            when "a"
-              @text_input.move_home
-            when "e"
-              @text_input.move_end
-            when "u"
-              @text_input.clear
-            end
-          elsif has_shift && code == "enter"
-            @text_input.newline
-          elsif has_alt && code == "enter"
+            handle_ctrl_key(tui, code)
+          elsif (has_shift || has_alt) && code == "enter"
+            # Shift+Enter or Alt+Enter: always newline
             @text_input.newline
           else
-            case code
-            when "enter"
-              submit_input(tui)
-            when "backspace"
-              @text_input.backspace
-              dismiss_completions
-            when "delete"
-              @text_input.delete_char
-              dismiss_completions
-            when "left"
-              @text_input.move_left
-              dismiss_completions
-            when "right"
-              @text_input.move_right
-              dismiss_completions
-            when "up"
-              if @text_input.empty? || (@text_input.line_count == 1 && @text_input.cursor_row == 0)
-                @text_input.history_back
-              else
-                @text_input.move_up
-              end
-            when "down"
-              if @text_input.line_count == 1
-                @text_input.history_forward
-              else
-                @text_input.move_down
-              end
-            when "home"
-              @text_input.move_home
-            when "end"
-              @text_input.move_end
-            when "tab"
-              handle_tab_completion
-            when "escape"
-              if !@completions.empty?
-                dismiss_completions
-              else
-                @text_input.clear
-              end
+            handle_normal_key(tui, code)
+          end
+        end
+
+        def handle_ctrl_key(tui, code)
+          case code
+          when "d"
+            if @text_input.empty?
+              @running = false
             else
-              if code.length == 1 && code.ord >= 32
-                @text_input.insert_char(code)
-                dismiss_completions
-              end
+              @text_input.delete_char
+            end
+          when "c"
+            handle_interrupt(tui)
+          when "j", "enter"
+            # Ctrl+J / Ctrl+Enter: always submit regardless of mode
+            submit_input(tui)
+          when "n"
+            # Toggle multi-line mode (fallback for terminals without Kitty protocol)
+            unless @kitty_protocol_active
+              @multiline_mode = !@multiline_mode
+            end
+          when "a"
+            @text_input.move_home
+          when "e"
+            @text_input.move_end
+          when "u"
+            @text_input.clear
+            @multiline_mode = false unless @kitty_protocol_active
+          end
+        end
+
+        def handle_normal_key(tui, code)
+          case code
+          when "enter"
+            if @multiline_mode && !@kitty_protocol_active
+              # In multi-line fallback mode, Enter inserts newline
+              @text_input.newline
+            else
+              submit_input(tui)
+            end
+          when "backspace"
+            @text_input.backspace
+            dismiss_completions
+            # Auto-exit multiline mode if we backspaced to single line
+            if @multiline_mode && @text_input.line_count == 1 && @text_input.empty?
+              @multiline_mode = false
+            end
+          when "delete"
+            @text_input.delete_char
+            dismiss_completions
+          when "left"
+            @text_input.move_left
+            dismiss_completions
+          when "right"
+            @text_input.move_right
+            dismiss_completions
+          when "up"
+            if @text_input.empty? || (@text_input.line_count == 1 && @text_input.cursor_row == 0)
+              @text_input.history_back
+            else
+              @text_input.move_up
+            end
+          when "down"
+            if @text_input.line_count == 1
+              @text_input.history_forward
+            else
+              @text_input.move_down
+            end
+          when "home"
+            @text_input.move_home
+          when "end"
+            @text_input.move_end
+          when "tab"
+            handle_tab_completion
+          when "escape"
+            if !@completions.empty?
+              dismiss_completions
+            elsif @multiline_mode
+              @multiline_mode = false
+              @text_input.clear
+            else
+              @text_input.clear
+            end
+          else
+            if code.length == 1 && code.ord >= 32
+              @text_input.insert_char(code)
+              dismiss_completions
             end
           end
         end
@@ -342,7 +381,13 @@ class Thor
         end
 
         def handle_paste_event(event)
-          @text_input.insert_text(event.content) if event.respond_to?(:content)
+          return unless event.respond_to?(:content)
+          text = event.content
+          @text_input.insert_text(text)
+          # Auto-enter multiline mode if paste contains newlines
+          if text.include?("\n") && !@kitty_protocol_active
+            @multiline_mode = true
+          end
         end
 
         def handle_interrupt(tui)
@@ -357,15 +402,15 @@ class Thor
 
           @last_interrupt_time = current_time
           @text_input.clear
-          # Push interrupt message above viewport
+          @multiline_mode = false unless @kitty_protocol_active
           emit_above(tui, "^C (press Ctrl+C again to exit, Ctrl+D to exit)", style: :system)
         end
 
         def submit_input(tui)
           input = @text_input.submit
+          @multiline_mode = false unless @kitty_protocol_active
           return if input.strip.empty?
 
-          # Echo the command above the viewport (into scrollback)
           emit_above(tui, "#{@prompt}#{input}", style: :command)
 
           if should_exit?(input)
@@ -385,7 +430,6 @@ class Thor
           captured_stdout = StringIO.new
           captured_stderr = StringIO.new
 
-          # Run command in a thread so we can animate the spinner
           command_thread = Thread.new do
             old_stdout = $stdout
             old_stderr = $stderr
@@ -404,7 +448,6 @@ class Thor
             end
           end
 
-          # Animate spinner while waiting for command to finish
           while command_thread.alive?
             render(tui)
             event = tui.poll_event(timeout: 0.05)
@@ -425,7 +468,6 @@ class Thor
           @spinner.stop
           @executing_command = false
 
-          # Push all output above viewport into terminal scrollback
           stdout_text = captured_stdout.string
           stderr_text = captured_stderr.string
 
@@ -438,9 +480,6 @@ class Thor
           end
         end
 
-        # Push text above the inline viewport into terminal scrollback.
-        # This is the key to the Claude Code-like UX: output lives in
-        # normal terminal scrollback, not inside the TUI.
         def emit_above(tui, text, style: nil)
           lines = text.split("\n", -1).map do |line_text|
             ratatui_style = case style
@@ -491,23 +530,53 @@ class Thor
           end
         end
 
-        # Disable mouse capture so the terminal handles scrollback and
-        # text selection natively. ratatui enables mouse capture by default
-        # which intercepts mouse wheel (breaks scrollback) and click/drag
-        # (breaks text selection). We don't use mouse events.
+        # Enable the Kitty keyboard protocol so the terminal sends modifier
+        # information with key events (e.g., Shift+Enter becomes distinguishable
+        # from plain Enter). Supported by iTerm2, Kitty, WezTerm, Ghostty,
+        # VS Code terminal, and others.
+        def enable_kitty_keyboard
+          tty = IO.console
+          return unless tty
+
+          # Check if the terminal supports it
+          supported = begin
+            RatatuiRuby::Terminal.supports_keyboard_enhancement?
+          rescue
+            false
+          end
+
+          if supported
+            # Push keyboard mode 1 (disambiguate escape codes)
+            tty.write("\e[>1u")
+            tty.flush
+            @kitty_protocol_active = true
+          end
+        rescue
+          @kitty_protocol_active = false
+        end
+
+        # Restore the keyboard protocol to normal on exit
+        def disable_kitty_keyboard
+          return unless @kitty_protocol_active
+
+          tty = IO.console
+          return unless tty
+
+          tty.write("\e[<u")
+          tty.flush
+          @kitty_protocol_active = false
+        rescue
+          # Not critical
+        end
+
         def disable_mouse_capture
           tty = IO.console
           return unless tty
 
-          # Disable all mouse tracking modes:
-          #   ?1000 - normal tracking
-          #   ?1002 - button-event tracking
-          #   ?1003 - any-event tracking
-          #   ?1006 - SGR extended mode
           tty.write("\e[?1000l\e[?1002l\e[?1003l\e[?1006l")
           tty.flush
         rescue
-          # Not critical if this fails
+          # Not critical
         end
 
         def strip_ansi(text)

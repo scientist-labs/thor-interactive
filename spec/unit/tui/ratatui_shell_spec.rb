@@ -94,5 +94,53 @@ if Thor::Interactive::TUI.available?
         expect(result).to eq("red text")
       end
     end
+
+    describe "multi-line mode" do
+      let(:shell) { described_class.new(thor_class) }
+
+      it "starts with multiline_mode off" do
+        expect(shell.send(:instance_variable_get, :@multiline_mode)).to be false
+      end
+
+      it "starts with kitty_protocol_active off" do
+        expect(shell.send(:instance_variable_get, :@kitty_protocol_active)).to be false
+      end
+
+      describe "#input_title" do
+        it "shows base prompt by default" do
+          expect(shell.send(:input_title)).to eq(">")
+        end
+
+        it "shows [MULTI] indicator when in multiline fallback mode" do
+          shell.send(:instance_variable_set, :@multiline_mode, true)
+          title = shell.send(:input_title)
+          expect(title).to include("[MULTI]")
+          expect(title).to include("Ctrl+J to submit")
+        end
+
+        it "does not show [MULTI] when kitty protocol is active" do
+          shell.send(:instance_variable_set, :@kitty_protocol_active, true)
+          shell.send(:instance_variable_set, :@multiline_mode, true)
+          expect(shell.send(:input_title)).not_to include("[MULTI]")
+        end
+      end
+
+      describe "#handle_paste_event" do
+        it "auto-enters multiline mode when paste contains newlines" do
+          shell.send(:instance_variable_set, :@kitty_protocol_active, false)
+          # Create a mock paste event
+          paste_event = double("PasteEvent", content: "line1\nline2")
+          shell.send(:handle_paste_event, paste_event)
+          expect(shell.send(:instance_variable_get, :@multiline_mode)).to be true
+        end
+
+        it "does not auto-enter multiline mode with kitty protocol" do
+          shell.send(:instance_variable_set, :@kitty_protocol_active, true)
+          paste_event = double("PasteEvent", content: "line1\nline2")
+          shell.send(:handle_paste_event, paste_event)
+          expect(shell.send(:instance_variable_get, :@multiline_mode)).to be false
+        end
+      end
+    end
   end
 end
