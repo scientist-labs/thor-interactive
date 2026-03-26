@@ -9,13 +9,14 @@
 #
 # Key bindings:
 #   Enter         - Submit input
-#   Shift+Enter   - New line (multi-line input)
+#   Shift+Enter   - New line (requires Kitty keyboard protocol)
 #   Alt+Enter     - New line (alternative)
+#   Ctrl+N        - Toggle multi-line mode (fallback for older terminals)
+#   Ctrl+J        - Always submit (even in multi-line mode)
 #   Tab           - Auto-complete commands
 #   Ctrl+C        - Clear input / double-tap to exit
 #   Ctrl+D        - Exit
-#   PageUp/Down   - Scroll output
-#   Escape        - Clear input / dismiss completions
+#   Escape        - Clear input / exit multi-line mode
 #
 # Requires: gem install ratatui_ruby
 
