@@ -1,4 +1,4 @@
-# Thor::Interactive
+<img src="/docs/assets/thor-interactive-wide.png" alt="thor-interactive" height="80px">
 
 Turn any Thor CLI into an interactive terminal application with persistent state, auto-completion, and a rich TUI powered by [ratatui_ruby](https://www.ratatui-ruby.dev/).
 
