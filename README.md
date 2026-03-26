@@ -83,59 +83,65 @@ Thor::Interactive.start(MyApp)
 
 ## State Persistence Example
 
-The key benefit is maintaining state between commands:
+The key benefit is maintaining state between commands. In normal CLI mode, each invocation starts fresh. In interactive mode, a single instance persists — so expensive connections, caches, and counters survive between commands:
 
 ```ruby
-class RAGApp < Thor
+class ProjectApp < Thor
   include Thor::Interactive::Command
 
   # These persist between commands in interactive mode
-  @@llm_client = nil
-  @@conversation_history = []
+  @@db = nil
+  @@tasks = []
 
-  desc "ask TEXT", "Ask the LLM a question"
-  def ask(text)
-    # Initialize once, reuse across commands
-    @@llm_client ||= expensive_llm_initialization
+  configure_interactive(prompt: "project> ")
 
-    response = @@llm_client.chat(text)
-    @@conversation_history << {input: text, output: response}
-    puts response
+  desc "connect HOST", "Connect to database"
+  def connect(host)
+    @@db = Database.new(host)  # Expensive — only done once
+    puts "Connected to #{host}"
   end
 
-  desc "history", "Show conversation history"
-  def history
-    @@conversation_history.each_with_index do |item, i|
-      puts "#{i+1}. Q: #{item[:input]}"
-      puts "   A: #{item[:output]}"
+  desc "add TASK", "Add a task"
+  def add(task)
+    @@tasks << {name: task, created_at: Time.now}
+    puts "Added: #{task} (#{@@tasks.size} total)"
+  end
+
+  desc "list", "Show all tasks"
+  def list
+    @@tasks.each_with_index do |t, i|
+      puts "#{i + 1}. #{t[:name]}"
     end
+  end
+
+  desc "status", "Show connection and task count"
+  def status
+    puts "Database: #{@@db ? 'connected' : 'not connected'}"
+    puts "Tasks: #{@@tasks.size}"
   end
 end
 ```
 
 In interactive mode:
 ```bash
-ruby rag_app.rb interactive
+ruby project_app.rb interactive
 
-rag> /ask What is Ruby?
-# LLM initializes once  
-Ruby is a programming language...
+project> /connect localhost
+Connected to localhost
 
-rag> /ask Tell me more
-# LLM client reused, conversation context maintained
-Based on our previous discussion about Ruby...
+project> /add "Design API"
+Added: Design API (1 total)
 
-rag> What's the difference between Ruby and Python?
-# Natural language goes directly to default handler (ask command)
-Ruby and Python differ in several ways...
+project> /add "Write tests"
+Added: Write tests (2 total)
 
-rag> /history  
-1. Q: What is Ruby?
-   A: Ruby is a programming language...
-2. Q: Tell me more
-   A: Based on our previous discussion about Ruby...
-3. Q: What's the difference between Ruby and Python?
-   A: Ruby and Python differ in several ways...
+project> /list
+1. Design API
+2. Write tests
+
+project> /status
+Database: connected    # Still connected — same instance!
+Tasks: 2
 ```
 
 ## Configuration
