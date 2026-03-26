@@ -90,8 +90,8 @@ class RAGApp < Thor
   include Thor::Interactive::Command
 
   # These persist between commands in interactive mode
-  class_variable_set(:@@llm_client, nil)
-  class_variable_set(:@@conversation_history, [])
+  @@llm_client = nil
+  @@conversation_history = []
 
   desc "ask TEXT", "Ask the LLM a question"
   def ask(text)
