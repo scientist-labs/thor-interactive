@@ -1,19 +1,18 @@
 # Thor::Interactive
 
-Turn any Thor CLI into an interactive REPL with persistent state and auto-completion.
+Turn any Thor CLI into an interactive terminal application with persistent state, auto-completion, and an optional rich TUI powered by [ratatui_ruby](https://www.ratatui-ruby.dev/).
 
-Thor::Interactive automatically converts your existing Thor command-line applications into interactive REPLs, maintaining state between commands and providing auto-completion for commands and parameters. Perfect for applications that benefit from persistent sessions like RAG pipelines, database tools, or any CLI that maintains caches or connections.
+Thor::Interactive converts your existing Thor command-line applications into interactive sessions — from a simple REPL to a full Claude Code-like terminal UI with multi-line input, a status bar, animated spinners, and theming. Perfect for RAG pipelines, database tools, or any CLI that benefits from persistent connections and cached state.
 
 ## Features
 
-- **Zero Configuration**: Works with any existing Thor application without modifications
+- **TUI Mode**: Rich terminal UI with multi-line input, status bar, spinner, tab completion overlay, and theming — powered by Rust via [ratatui_ruby](https://www.ratatui-ruby.dev/)
+- **Easy Setup**: Add one line (`include Thor::Interactive::Command`) for a basic REPL, add `ratatui_ruby` to your Gemfile for the full TUI
 - **State Persistence**: Maintains class variables and instance state between commands
-- **Auto-completion**: Tab completion for command names and basic parameter support
-- **Default Handlers**: Configurable fallback for non-command input
-- **Command History**: Persistent readline history with up/down arrow navigation
-- **Both Modes**: Supports both traditional CLI usage and interactive REPL mode
-- **Graceful Exit**: Proper handling of Ctrl+C interrupts and Ctrl+D/exit commands
-- **TUI Mode** (optional): Rich terminal UI powered by [ratatui_ruby](https://www.ratatui-ruby.dev/) with multi-line input, status bar, spinner, and theming
+- **Auto-completion**: Tab completion for command names, options, and paths
+- **Default Handlers**: Configurable fallback for non-command input (great for natural language interfaces)
+- **Command History**: Persistent history with up/down arrow navigation
+- **Graceful Degradation**: TUI mode falls back to a Reline-based REPL if `ratatui_ruby` is not installed
 
 ## Installation
 

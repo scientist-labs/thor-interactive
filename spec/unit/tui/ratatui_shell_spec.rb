@@ -461,6 +461,104 @@ if Thor::Interactive::TUI.available?
       end
     end
 
+    describe "state persistence" do
+      def capture_stdout
+        old = $stdout
+        $stdout = StringIO.new
+        yield
+        $stdout.string
+      ensure
+        $stdout = old
+      end
+
+      it "maintains instance variable state between commands" do
+        stateful_class = Class.new(Thor) do
+          desc "increment", "Increment counter"
+          def increment
+            @counter ||= 0
+            @counter += 1
+            puts "Count: #{@counter}"
+          end
+
+          desc "status", "Show counter"
+          def status
+            puts "Counter: #{@counter || 0}"
+          end
+        end
+
+        shell = described_class.new(stateful_class)
+
+        out1 = capture_stdout { shell.send(:process_input, "increment") }
+        expect(out1.strip).to eq("Count: 1")
+
+        out2 = capture_stdout { shell.send(:process_input, "increment") }
+        expect(out2.strip).to eq("Count: 2")
+
+        out3 = capture_stdout { shell.send(:process_input, "status") }
+        expect(out3.strip).to eq("Counter: 2")
+      end
+
+      it "persists named state between set and get commands" do
+        stateful_class = Class.new(Thor) do
+          desc "set_name NAME", "Set a name"
+          def set_name(name)
+            @name = name
+            puts "Name set to #{@name}"
+          end
+
+          desc "get_name", "Get the name"
+          def get_name
+            puts @name || "not set"
+          end
+        end
+
+        shell = described_class.new(stateful_class)
+
+        out1 = capture_stdout { shell.send(:process_input, "get_name") }
+        expect(out1.strip).to eq("not set")
+
+        capture_stdout { shell.send(:process_input, "set_name Alice") }
+
+        out2 = capture_stdout { shell.send(:process_input, "get_name") }
+        expect(out2.strip).to eq("Alice")
+      end
+
+      it "persists collection state across add and list commands" do
+        stateful_class = Class.new(Thor) do
+          desc "add ITEM", "Add item"
+          def add(item)
+            @items ||= []
+            @items << item
+          end
+
+          desc "list", "List items"
+          def list
+            (@items || []).each_with_index { |item, i| puts "#{i + 1}. #{item}" }
+          end
+        end
+
+        shell = described_class.new(stateful_class)
+
+        capture_stdout { shell.send(:process_input, "add first") }
+        capture_stdout { shell.send(:process_input, "add second") }
+        out = capture_stdout { shell.send(:process_input, "list") }
+        expect(out).to include("1. first")
+        expect(out).to include("2. second")
+      end
+
+      it "uses the same thor_instance for all commands" do
+        shell = described_class.new(thor_class)
+        instance = shell.thor_instance
+
+        # Calling process_input doesn't create a new instance
+        capture_stdout { shell.send(:process_input, "/hello") }
+        expect(shell.thor_instance).to be(instance)
+
+        capture_stdout { shell.send(:process_input, "/hello") }
+        expect(shell.thor_instance).to be(instance)
+      end
+    end
+
     describe "multi-line without Kitty protocol (fallback workflow)" do
       let(:tui) { double("tui") }
 
