@@ -12,3 +12,6 @@ gem "rspec", "~> 3.0"
 gem "simplecov", "~> 0.22", require: false
 
 gem "standard", "~> 1.3"
+
+# Optional TUI mode dependency
+gem "ratatui_ruby", "~> 1.4", require: false
