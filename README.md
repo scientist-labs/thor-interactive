@@ -2,8 +2,10 @@
 
 Turn any Thor CLI into an interactive terminal application with persistent state, auto-completion, and a rich TUI powered by [ratatui_ruby](https://www.ratatui-ruby.dev/).
 
-<img src="/docs/assets/screenshot.png" alt="thor-interactive TUI screenshot" width="600">
-<br><sub>Screenshot from <a href="https://github.com/scientist-labs/ragnar-cli">Ragnar</a>, a RAG pipeline built with thor-interactive.</sub>
+<p>
+  <img src="/docs/assets/screenshot.png" alt="thor-interactive TUI screenshot" width="600"><br>
+  <sub>Screenshot from <a href="https://github.com/scientist-labs/ragnar-cli">Ragnar</a>, a RAG pipeline built with thor-interactive.</sub>
+</p>
 
 Thor::Interactive converts your existing Thor command-line applications into interactive sessions — a Claude Code-like terminal UI with multi-line input, a status bar, animated spinners, and theming. Perfect for RAG pipelines, database tools, or any CLI that benefits from persistent connections and cached state.
 
